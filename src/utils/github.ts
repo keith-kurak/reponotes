@@ -22,14 +22,17 @@ export class GitHubAPIError extends Error {
 async function makeGitHubRequest(
   path: string,
   token: string,
-  method: 'GET' | 'POST' = 'GET'
+  options: { method?: 'GET' | 'POST' | 'PUT'; body?: string } = {}
 ): Promise<Response> {
+  const { method = 'GET', body } = options;
   const response = await fetch(`${GITHUB_API_BASE}${path}`, {
     method,
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github.v3+json',
+      ...(body && { 'Content-Type': 'application/json' }),
     },
+    ...(body && { body }),
   });
 
   if (!response.ok) {
@@ -106,12 +109,27 @@ export async function listMarkdownFiles(
   return markdownFiles;
 }
 
+export interface FileContentResult {
+  content: string;
+  sha: string;
+}
+
 export async function fetchFileContent(
   token: string,
   repoName: string,
   owner: string,
   filePath: string
 ): Promise<string> {
+  const result = await fetchFileContentWithSha(token, repoName, owner, filePath);
+  return result.content;
+}
+
+export async function fetchFileContentWithSha(
+  token: string,
+  repoName: string,
+  owner: string,
+  filePath: string
+): Promise<FileContentResult> {
   const response = await makeGitHubRequest(
     `/repos/${owner}/${repoName}/contents/${filePath}`,
     token
@@ -121,8 +139,36 @@ export async function fetchFileContent(
 
   if (data.content) {
     const decoded = atob(data.content.replace(/\n/g, ''));
-    return decoded;
+    return {
+      content: decoded,
+      sha: data.sha,
+    };
   }
 
   throw new Error('File content not found');
+}
+
+export async function updateFileContent(
+  token: string,
+  repoName: string,
+  owner: string,
+  filePath: string,
+  content: string,
+  sha: string,
+  message: string = `Update ${filePath}`
+): Promise<void> {
+  const encodedContent = btoa(content);
+
+  await makeGitHubRequest(
+    `/repos/${owner}/${repoName}/contents/${filePath}`,
+    token,
+    {
+      method: 'PUT',
+      body: JSON.stringify({
+        message,
+        content: encodedContent,
+        sha,
+      }),
+    }
+  );
 }

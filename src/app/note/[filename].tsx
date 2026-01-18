@@ -6,19 +6,28 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { readLocalFile, writeLocalFile } from '@/utils/fileSystem';
-import { fetchFileContent } from '@/utils/github';
+import { fetchFileContentWithSha, updateFileContent } from '@/utils/github';
 import { storage } from '@/utils/storage';
+import { pendingChanges, fileSha } from '@/utils/pendingChanges';
 
 export default function NoteViewerScreen() {
   const { filename } = useLocalSearchParams<{ filename: string }>();
   const [content, setContent] = useState<string>('');
+  const [editedContent, setEditedContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
+
+  const decodedFilename = filename ? decodeURIComponent(filename) : '';
 
   const loadContent = async () => {
     if (!filename) return;
@@ -26,8 +35,11 @@ export default function NoteViewerScreen() {
     try {
       setLoading(true);
       setError(null);
-      const fileContent = await readLocalFile(decodeURIComponent(filename));
+      const fileContent = readLocalFile(decodedFilename);
       setContent(fileContent);
+      setEditedContent(fileContent);
+      const isPending = await pendingChanges.has(decodedFilename);
+      setHasPendingChanges(isPending);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load file');
     } finally {
@@ -38,6 +50,21 @@ export default function NoteViewerScreen() {
   useEffect(() => {
     loadContent();
   }, [filename]);
+
+  const handleStartEditing = () => {
+    setEditedContent(content);
+    setIsEditing(true);
+  };
+
+  const handleFinishEditing = async () => {
+    if (editedContent !== content) {
+      writeLocalFile(decodedFilename, editedContent);
+      setContent(editedContent);
+      await pendingChanges.add(decodedFilename);
+      setHasPendingChanges(true);
+    }
+    setIsEditing(false);
+  };
 
   const syncMutation = useMutation({
     mutationFn: async () => {
@@ -56,10 +83,28 @@ export default function NoteViewerScreen() {
         throw new Error('GitHub owner not configured. Please configure in Settings.');
       }
 
-      const decodedFilename = decodeURIComponent(filename);
-      const newContent = await fetchFileContent(token, repoName, owner, decodedFilename);
-      await writeLocalFile(decodedFilename, newContent);
-      await loadContent();
+      if (hasPendingChanges) {
+        // Upload changes to GitHub
+        let sha = await fileSha.get(decodedFilename);
+        if (!sha) {
+          // Fetch the current SHA from GitHub if we don't have it stored
+          const current = await fetchFileContentWithSha(token, repoName, owner, decodedFilename);
+          sha = current.sha;
+        }
+        await updateFileContent(token, repoName, owner, decodedFilename, content, sha);
+        // Fetch the new SHA after update
+        const result = await fetchFileContentWithSha(token, repoName, owner, decodedFilename);
+        await fileSha.set(decodedFilename, result.sha);
+        await pendingChanges.remove(decodedFilename);
+        setHasPendingChanges(false);
+      } else {
+        // Download from GitHub
+        const result = await fetchFileContentWithSha(token, repoName, owner, decodedFilename);
+        writeLocalFile(decodedFilename, result.content);
+        await fileSha.set(decodedFilename, result.sha);
+        setContent(result.content);
+        setEditedContent(result.content);
+      }
     },
   });
 
@@ -69,22 +114,46 @@ export default function NoteViewerScreen() {
         options={{
           title: filename ? decodeURIComponent(filename) : 'Note',
           headerRight: () => (
-            <TouchableOpacity
-              onPress={() => syncMutation.mutate()}
-              disabled={syncMutation.isPending}
-              style={{ marginRight: 8 }}
-            >
-              {syncMutation.isPending ? (
-                <ActivityIndicator size="small" color="#007AFF" />
-              ) : (
-                <Ionicons name="cloud-download-outline" size={24} color="#007AFF" />
+            <View style={styles.headerButtons}>
+              {hasPendingChanges && (
+                <View style={styles.pendingDot} />
               )}
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={isEditing ? handleFinishEditing : handleStartEditing}
+                disabled={loading || syncMutation.isPending}
+                style={styles.headerButton}
+              >
+                <Ionicons
+                  name={isEditing ? 'checkmark' : 'create-outline'}
+                  size={24}
+                  color="#007AFF"
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => syncMutation.mutate()}
+                disabled={syncMutation.isPending || isEditing}
+                style={styles.headerButton}
+              >
+                {syncMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#007AFF" />
+                ) : (
+                  <Ionicons
+                    name="sync-outline"
+                    size={24}
+                    color={isEditing ? '#ccc' : '#007AFF'}
+                  />
+                )}
+              </TouchableOpacity>
+            </View>
           ),
         }}
       />
 
-      <View style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={100}
+      >
         {syncMutation.isError && (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>
@@ -97,7 +166,9 @@ export default function NoteViewerScreen() {
 
         {syncMutation.isSuccess && (
           <View style={styles.successBox}>
-            <Text style={styles.successText}>File synced successfully!</Text>
+            <Text style={styles.successText}>
+              {hasPendingChanges ? 'Changes saved to GitHub!' : 'File synced successfully!'}
+            </Text>
           </View>
         )}
 
@@ -111,12 +182,21 @@ export default function NoteViewerScreen() {
             <Text style={styles.errorTitle}>Error</Text>
             <Text style={styles.errorMessage}>{error}</Text>
           </View>
+        ) : isEditing ? (
+          <TextInput
+            style={styles.textInput}
+            value={editedContent}
+            onChangeText={setEditedContent}
+            multiline
+            autoFocus
+            textAlignVertical="top"
+          />
         ) : (
           <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
             <Text style={styles.text}>{content}</Text>
           </ScrollView>
         )}
-      </View>
+      </KeyboardAvoidingView>
     </>
   );
 }
@@ -125,6 +205,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerButton: {
+    padding: 4,
+  },
+  pendingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FFC107',
+    marginRight: 4,
   },
   loadingContainer: {
     flex: 1,
@@ -156,6 +251,14 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   text: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#333',
+    fontFamily: 'monospace',
+  },
+  textInput: {
+    flex: 1,
+    padding: 16,
     fontSize: 16,
     lineHeight: 24,
     color: '#333',
