@@ -1,52 +1,58 @@
-import * as FileSystem from 'expo-file-system';
+import { File, Directory, Paths } from 'expo-file-system';
 
-const NOTES_DIR = `${FileSystem.documentDirectory}notes/`;
+const notesDirectory = new Directory(Paths.document, 'notes');
 
-async function ensureNotesDirectory(): Promise<void> {
-  const dirInfo = await FileSystem.getInfoAsync(NOTES_DIR);
-  if (!dirInfo.exists) {
-    await FileSystem.makeDirectoryAsync(NOTES_DIR, { intermediates: true });
+function ensureNotesDirectory(): void {
+  if (!notesDirectory.exists) {
+    notesDirectory.create();
   }
 }
 
-export async function listLocalFiles(): Promise<string[]> {
-  await ensureNotesDirectory();
-  const files = await FileSystem.readDirectoryAsync(NOTES_DIR);
-  return files.filter(file => file.endsWith('.md')).sort();
+export function listLocalFiles(): string[] {
+  ensureNotesDirectory();
+  const items = notesDirectory.list();
+  return items
+    .filter((item): item is File => item instanceof File && item.name.endsWith('.md'))
+    .map(file => file.name)
+    .sort();
 }
 
-export async function readLocalFile(filename: string): Promise<string> {
-  await ensureNotesDirectory();
-  const filePath = `${NOTES_DIR}${filename}`;
-  const fileInfo = await FileSystem.getInfoAsync(filePath);
+export function readLocalFile(filename: string): string {
+  ensureNotesDirectory();
+  const file = new File(notesDirectory, filename);
 
-  if (!fileInfo.exists) {
+  if (!file.exists) {
     throw new Error(`File not found: ${filename}`);
   }
 
-  return await FileSystem.readAsStringAsync(filePath);
+  return file.textSync();
 }
 
-export async function writeLocalFile(filename: string, content: string): Promise<void> {
-  await ensureNotesDirectory();
-  const filePath = `${NOTES_DIR}${filename}`;
-  await FileSystem.writeAsStringAsync(filePath, content);
+export function writeLocalFile(filename: string, content: string): void {
+  ensureNotesDirectory();
+  const file = new File(notesDirectory, filename);
+  if (!file.exists) {
+    file.create();
+  }
+  file.write(content);
 }
 
-export async function deleteLocalFile(filename: string): Promise<void> {
-  await ensureNotesDirectory();
-  const filePath = `${NOTES_DIR}${filename}`;
-  await FileSystem.deleteAsync(filePath, { idempotent: true });
+export function deleteLocalFile(filename: string): void {
+  ensureNotesDirectory();
+  const file = new File(notesDirectory, filename);
+  if (file.exists) {
+    file.delete();
+  }
 }
 
-export async function clearAllLocalFiles(): Promise<void> {
-  await ensureNotesDirectory();
-  const files = await FileSystem.readDirectoryAsync(NOTES_DIR);
-  await Promise.all(
-    files.map(file => FileSystem.deleteAsync(`${NOTES_DIR}${file}`, { idempotent: true }))
-  );
+export function clearAllLocalFiles(): void {
+  ensureNotesDirectory();
+  const items = notesDirectory.list();
+  for (const item of items) {
+    item.delete();
+  }
 }
 
 export function getNotesDirectory(): string {
-  return NOTES_DIR;
+  return notesDirectory.uri;
 }
