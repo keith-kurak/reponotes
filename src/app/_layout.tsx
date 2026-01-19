@@ -6,7 +6,10 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { KeyboardProvider } from "react-native-keyboard-controller";
+import {
+  KeyboardAvoidingView,
+  KeyboardProvider,
+} from "react-native-keyboard-controller";
 import "react-native-reanimated";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -29,10 +32,15 @@ export default function RootLayout() {
         <ThemeProvider
           value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
         >
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="note/[filename]" options={{ title: "Note" }} />
-          </Stack>
+          <KeyboardAvoidingView behavior={"padding"} style={{ flex: 1 }}>
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="note/[filename]"
+                options={{ title: "Note" }}
+              />
+            </Stack>
+          </KeyboardAvoidingView>
           <StatusBar style="dark" />
         </ThemeProvider>
       </QueryClientProvider>

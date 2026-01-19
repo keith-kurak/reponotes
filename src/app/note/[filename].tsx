@@ -23,7 +23,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 export default function NoteViewerScreen() {
   const { filename } = useLocalSearchParams<{ filename: string }>();
@@ -102,7 +101,9 @@ export default function NoteViewerScreen() {
     onSuccess: () => {
       showToast(
         "success",
-        hasPendingChanges ? "Changes saved to GitHub!" : "File synced successfully!",
+        hasPendingChanges
+          ? "Changes saved to GitHub!"
+          : "File synced successfully!",
       );
     },
     onError: (err) => {
@@ -238,7 +239,9 @@ export default function NoteViewerScreen() {
                   ) : (
                     <Ionicons
                       name={
-                        hasPendingChanges ? "cloud-upload-outline" : "sync-outline"
+                        hasPendingChanges
+                          ? "cloud-upload-outline"
+                          : "sync-outline"
                       }
                       size={24}
                       color="#007AFF"
@@ -270,19 +273,17 @@ export default function NoteViewerScreen() {
             <Text style={styles.errorMessage}>{error}</Text>
           </View>
         ) : isEditing ? (
-          <KeyboardAwareScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.editContent}
-          >
+          <View style={styles.editContainer}>
             <TextInput
               style={styles.textInput}
               value={editedContent}
               onChangeText={setEditedContent}
               multiline
               autoFocus
+              scrollEnabled
               textAlignVertical="top"
             />
-          </KeyboardAwareScrollView>
+          </View>
         ) : (
           <ScrollView
             style={styles.scrollView}
@@ -339,6 +340,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
   },
+  editContainer: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
@@ -355,8 +359,8 @@ const styles = StyleSheet.create({
     fontFamily: "monospace",
   },
   textInput: {
-    flexGrow: 1,
-    minHeight: "100%",
+    flex: 1,
+    //minHeight: "100%",
     padding: 16,
     fontSize: 16,
     lineHeight: 24,
