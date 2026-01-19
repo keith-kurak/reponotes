@@ -1,33 +1,39 @@
-import { useState, useEffect } from 'react';
+import { readLocalFile, writeLocalFile } from "@/utils/fileSystem";
 import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
+  createFileOnGitHub,
+  fetchFileContentWithSha,
+  GitHubAPIError,
+  updateFileContent,
+} from "@/utils/github";
+import { fileSha, pendingChanges } from "@/utils/pendingChanges";
+import { storage } from "@/utils/storage";
+import { Ionicons } from "@expo/vector-icons";
+import { useMutation } from "@tanstack/react-query";
+import { Stack, useLocalSearchParams } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useEffect, useState } from "react";
+import {
   ActivityIndicator,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
-} from 'react-native';
-import { useLocalSearchParams, Stack } from 'expo-router';
-import { useMutation } from '@tanstack/react-query';
-import { Ionicons } from '@expo/vector-icons';
-import { readLocalFile, writeLocalFile } from '@/utils/fileSystem';
-import { fetchFileContentWithSha, updateFileContent, createFileOnGitHub, GitHubAPIError } from '@/utils/github';
-import { storage } from '@/utils/storage';
-import { pendingChanges, fileSha } from '@/utils/pendingChanges';
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function NoteViewerScreen() {
   const { filename } = useLocalSearchParams<{ filename: string }>();
-  const [content, setContent] = useState<string>('');
-  const [editedContent, setEditedContent] = useState<string>('');
+  const [content, setContent] = useState<string>("");
+  const [editedContent, setEditedContent] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
 
-  const decodedFilename = filename ? decodeURIComponent(filename) : '';
+  const decodedFilename = filename ? decodeURIComponent(filename) : "";
 
   const loadContent = () => {
     if (!filename) return;
@@ -41,7 +47,7 @@ export default function NoteViewerScreen() {
       const isPending = pendingChanges.has(decodedFilename);
       setHasPendingChanges(isPending);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load file');
+      setError(err instanceof Error ? err.message : "Failed to load file");
     } finally {
       setLoading(false);
     }
@@ -68,17 +74,21 @@ export default function NoteViewerScreen() {
 
   const syncMutation = useMutation({
     mutationFn: async () => {
-      if (!filename) throw new Error('No filename provided');
+      if (!filename) throw new Error("No filename provided");
 
       const token = storage.getGitHubPAT();
       const repoName = storage.getRepoName();
       const owner = storage.getGitHubOwner();
 
       if (!token) {
-        throw new Error('GitHub PAT not configured. Please configure in Settings.');
+        throw new Error(
+          "GitHub PAT not configured. Please configure in Settings.",
+        );
       }
       if (!owner) {
-        throw new Error('GitHub owner not configured. Please configure in Settings.');
+        throw new Error(
+          "GitHub owner not configured. Please configure in Settings.",
+        );
       }
 
       if (hasPendingChanges) {
@@ -89,7 +99,12 @@ export default function NoteViewerScreen() {
         if (!sha) {
           // Try to fetch the current SHA from GitHub if we don't have it stored
           try {
-            const current = await fetchFileContentWithSha(token, repoName, owner, decodedFilename);
+            const current = await fetchFileContentWithSha(
+              token,
+              repoName,
+              owner,
+              decodedFilename,
+            );
             sha = current.sha;
           } catch (error) {
             // File doesn't exist on GitHub yet - that's OK, we'll create it
@@ -101,10 +116,23 @@ export default function NoteViewerScreen() {
 
         if (sha) {
           // Update existing file
-          newSha = await updateFileContent(token, repoName, owner, decodedFilename, content, sha);
+          newSha = await updateFileContent(
+            token,
+            repoName,
+            owner,
+            decodedFilename,
+            content,
+            sha,
+          );
         } else {
           // Create new file on GitHub
-          newSha = await createFileOnGitHub(token, repoName, owner, decodedFilename, content);
+          newSha = await createFileOnGitHub(
+            token,
+            repoName,
+            owner,
+            decodedFilename,
+            content,
+          );
         }
 
         fileSha.set(decodedFilename, newSha);
@@ -112,7 +140,12 @@ export default function NoteViewerScreen() {
         setHasPendingChanges(false);
       } else {
         // Download from GitHub
-        const result = await fetchFileContentWithSha(token, repoName, owner, decodedFilename);
+        const result = await fetchFileContentWithSha(
+          token,
+          repoName,
+          owner,
+          decodedFilename,
+        );
         writeLocalFile(decodedFilename, result.content);
         fileSha.set(decodedFilename, result.sha);
         setContent(result.content);
@@ -123,21 +156,20 @@ export default function NoteViewerScreen() {
 
   return (
     <>
+      <StatusBar style="light" />
       <Stack.Screen
         options={{
-          title: filename ? decodeURIComponent(filename) : 'Note',
+          title: filename ? decodeURIComponent(filename) : "Note",
           headerRight: () => (
             <View style={styles.headerButtons}>
-              {hasPendingChanges && (
-                <View style={styles.pendingDot} />
-              )}
+              {hasPendingChanges && <View style={styles.pendingDot} />}
               <TouchableOpacity
                 onPress={isEditing ? handleFinishEditing : handleStartEditing}
                 disabled={loading || syncMutation.isPending}
                 style={styles.headerButton}
               >
                 <Ionicons
-                  name={isEditing ? 'checkmark' : 'create-outline'}
+                  name={isEditing ? "checkmark" : "create-outline"}
                   size={24}
                   color="#007AFF"
                 />
@@ -153,7 +185,7 @@ export default function NoteViewerScreen() {
                   <Ionicons
                     name="sync-outline"
                     size={24}
-                    color={isEditing ? '#ccc' : '#007AFF'}
+                    color={isEditing ? "#ccc" : "#007AFF"}
                   />
                 )}
               </TouchableOpacity>
@@ -164,7 +196,7 @@ export default function NoteViewerScreen() {
 
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={100}
       >
         {syncMutation.isError && (
@@ -172,7 +204,7 @@ export default function NoteViewerScreen() {
             <Text style={styles.errorText}>
               {syncMutation.error instanceof Error
                 ? syncMutation.error.message
-                : 'Failed to sync file'}
+                : "Failed to sync file"}
             </Text>
           </View>
         )}
@@ -180,7 +212,9 @@ export default function NoteViewerScreen() {
         {syncMutation.isSuccess && (
           <View style={styles.successBox}>
             <Text style={styles.successText}>
-              {hasPendingChanges ? 'Changes saved to GitHub!' : 'File synced successfully!'}
+              {hasPendingChanges
+                ? "Changes saved to GitHub!"
+                : "File synced successfully!"}
             </Text>
           </View>
         )}
@@ -205,7 +239,10 @@ export default function NoteViewerScreen() {
             textAlignVertical="top"
           />
         ) : (
-          <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.content}
+          >
             <Text style={styles.text}>{content}</Text>
           </ScrollView>
         )}
@@ -217,11 +254,11 @@ export default function NoteViewerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   headerButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   headerButton: {
@@ -231,31 +268,31 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#FFC107',
+    backgroundColor: "#FFC107",
     marginRight: 4,
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   errorContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 32,
   },
   errorTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#f44336',
+    fontWeight: "600",
+    color: "#f44336",
     marginTop: 16,
   },
   errorMessage: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
     marginTop: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
   scrollView: {
     flex: 1,
@@ -266,41 +303,41 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 16,
     lineHeight: 24,
-    color: '#333',
-    fontFamily: 'monospace',
+    color: "#333",
+    fontFamily: "monospace",
   },
   textInput: {
     flex: 1,
     padding: 16,
     fontSize: 16,
     lineHeight: 24,
-    color: '#333',
-    fontFamily: 'monospace',
+    color: "#333",
+    fontFamily: "monospace",
   },
   errorBox: {
-    backgroundColor: '#ffebee',
+    backgroundColor: "#ffebee",
     padding: 12,
     marginHorizontal: 16,
     marginTop: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#f44336',
+    borderColor: "#f44336",
   },
   errorText: {
-    color: '#c62828',
+    color: "#c62828",
     fontSize: 14,
   },
   successBox: {
-    backgroundColor: '#e8f5e9',
+    backgroundColor: "#e8f5e9",
     padding: 12,
     marginHorizontal: 16,
     marginTop: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#4caf50',
+    borderColor: "#4caf50",
   },
   successText: {
-    color: '#2e7d32',
+    color: "#2e7d32",
     fontSize: 14,
   },
 });

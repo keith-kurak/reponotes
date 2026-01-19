@@ -5,6 +5,7 @@ import { storage } from "@/utils/storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { Link, router, useFocusEffect } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -16,6 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function FileListScreen() {
   const [localFiles, setLocalFiles] = useState<string[]>([]);
@@ -107,7 +109,8 @@ export default function FileListScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <StatusBar style="dark" />
       <View style={styles.toolbar}>
         <TouchableOpacity
           style={styles.toolbarButton}
@@ -119,13 +122,6 @@ export default function FileListScreen() {
           ) : (
             <Ionicons name="sync-outline" size={24} color="#007AFF" />
           )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.toolbarButton}
-          onPress={() => router.push("/settings")}
-        >
-          <Ionicons name="settings-outline" size={24} color="#007AFF" />
         </TouchableOpacity>
       </View>
 
@@ -214,7 +210,7 @@ export default function FileListScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 

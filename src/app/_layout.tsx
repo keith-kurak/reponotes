@@ -19,10 +19,6 @@ const queryClient = new QueryClient({
   },
 });
 
-export const unstable_settings = {
-  anchor: "index",
-};
-
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
@@ -30,12 +26,8 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         <Stack>
-          <Stack.Screen name="index" options={{ title: "Notes" }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="note/[filename]" options={{ title: "Note" }} />
-          <Stack.Screen
-            name="settings"
-            options={{ presentation: "modal", title: "Settings" }}
-          />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>
