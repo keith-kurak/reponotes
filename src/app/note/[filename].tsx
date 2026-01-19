@@ -285,6 +285,7 @@ export default function NoteViewerScreen() {
                 onChangeText={setEditedContent}
                 multiline
                 autoFocus
+                scrollEnabled={false}
                 textAlignVertical="top"
               />
             </View>
@@ -368,5 +369,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: "#333",
     fontFamily: "monospace",
+    textAlignVertical: "top",
   },
 });
