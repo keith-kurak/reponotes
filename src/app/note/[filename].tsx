@@ -29,7 +29,7 @@ export default function NoteViewerScreen() {
 
   const decodedFilename = filename ? decodeURIComponent(filename) : '';
 
-  const loadContent = async () => {
+  const loadContent = () => {
     if (!filename) return;
 
     try {
@@ -38,7 +38,7 @@ export default function NoteViewerScreen() {
       const fileContent = readLocalFile(decodedFilename);
       setContent(fileContent);
       setEditedContent(fileContent);
-      const isPending = await pendingChanges.has(decodedFilename);
+      const isPending = pendingChanges.has(decodedFilename);
       setHasPendingChanges(isPending);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load file');
@@ -56,11 +56,11 @@ export default function NoteViewerScreen() {
     setIsEditing(true);
   };
 
-  const handleFinishEditing = async () => {
+  const handleFinishEditing = () => {
     if (editedContent !== content) {
       writeLocalFile(decodedFilename, editedContent);
       setContent(editedContent);
-      await pendingChanges.add(decodedFilename);
+      pendingChanges.add(decodedFilename);
       setHasPendingChanges(true);
     }
     setIsEditing(false);
@@ -70,11 +70,9 @@ export default function NoteViewerScreen() {
     mutationFn: async () => {
       if (!filename) throw new Error('No filename provided');
 
-      const [token, repoName, owner] = await Promise.all([
-        storage.getGitHubPAT(),
-        storage.getRepoName(),
-        storage.getGitHubOwner(),
-      ]);
+      const token = storage.getGitHubPAT();
+      const repoName = storage.getRepoName();
+      const owner = storage.getGitHubOwner();
 
       if (!token) {
         throw new Error('GitHub PAT not configured. Please configure in Settings.');
@@ -85,7 +83,7 @@ export default function NoteViewerScreen() {
 
       if (hasPendingChanges) {
         // Upload changes to GitHub
-        let sha = await fileSha.get(decodedFilename);
+        let sha = fileSha.get(decodedFilename);
         let newSha: string;
 
         if (!sha) {
@@ -109,14 +107,14 @@ export default function NoteViewerScreen() {
           newSha = await createFileOnGitHub(token, repoName, owner, decodedFilename, content);
         }
 
-        await fileSha.set(decodedFilename, newSha);
-        await pendingChanges.remove(decodedFilename);
+        fileSha.set(decodedFilename, newSha);
+        pendingChanges.remove(decodedFilename);
         setHasPendingChanges(false);
       } else {
         // Download from GitHub
         const result = await fetchFileContentWithSha(token, repoName, owner, decodedFilename);
         writeLocalFile(decodedFilename, result.content);
-        await fileSha.set(decodedFilename, result.sha);
+        fileSha.set(decodedFilename, result.sha);
         setContent(result.content);
         setEditedContent(result.content);
       }

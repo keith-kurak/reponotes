@@ -22,23 +22,19 @@ export default function SettingsScreen() {
     loadSettings();
   }, []);
 
-  const loadSettings = async () => {
-    const [pat, repo, savedOwner] = await Promise.all([
-      storage.getGitHubPAT(),
-      storage.getRepoName(),
-      storage.getGitHubOwner(),
-    ]);
+  const loadSettings = () => {
+    const pat = storage.getGitHubPAT();
+    const repo = storage.getRepoName();
+    const savedOwner = storage.getGitHubOwner();
     if (pat) setGithubPAT(pat);
     if (repo) setRepoName(repo);
     if (savedOwner) setOwner(savedOwner);
   };
 
-  const saveSettings = async () => {
-    await Promise.all([
-      storage.setGitHubPAT(githubPAT),
-      storage.setRepoName(repoName),
-      storage.setGitHubOwner(owner),
-    ]);
+  const saveSettings = () => {
+    storage.setGitHubPAT(githubPAT);
+    storage.setRepoName(repoName);
+    storage.setGitHubOwner(owner);
   };
 
   const testMutation = useMutation({
@@ -53,7 +49,7 @@ export default function SettingsScreen() {
         throw new Error('Repository name is required');
       }
 
-      await saveSettings();
+      saveSettings();
       return await testConnection(githubPAT, repoName, owner);
     },
     onSuccess: (result) => {

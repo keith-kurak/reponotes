@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import Storage from 'expo-sqlite/kv-store';
 
 const STORAGE_KEYS = {
   GITHUB_PAT: '@reponotes/github_pat',
@@ -7,36 +7,34 @@ const STORAGE_KEYS = {
 } as const;
 
 export const storage = {
-  async getGitHubPAT(): Promise<string | null> {
-    return await AsyncStorage.getItem(STORAGE_KEYS.GITHUB_PAT);
+  getGitHubPAT(): string | null {
+    return Storage.getItemSync(STORAGE_KEYS.GITHUB_PAT);
   },
 
-  async setGitHubPAT(token: string): Promise<void> {
-    await AsyncStorage.setItem(STORAGE_KEYS.GITHUB_PAT, token);
+  setGitHubPAT(token: string): void {
+    Storage.setItemSync(STORAGE_KEYS.GITHUB_PAT, token);
   },
 
-  async getRepoName(): Promise<string> {
-    const stored = await AsyncStorage.getItem(STORAGE_KEYS.REPO_NAME);
+  getRepoName(): string {
+    const stored = Storage.getItemSync(STORAGE_KEYS.REPO_NAME);
     return stored || 'reponotes-notebook';
   },
 
-  async setRepoName(repoName: string): Promise<void> {
-    await AsyncStorage.setItem(STORAGE_KEYS.REPO_NAME, repoName);
+  setRepoName(repoName: string): void {
+    Storage.setItemSync(STORAGE_KEYS.REPO_NAME, repoName);
   },
 
-  async getGitHubOwner(): Promise<string | null> {
-    return await AsyncStorage.getItem(STORAGE_KEYS.GITHUB_OWNER);
+  getGitHubOwner(): string | null {
+    return Storage.getItemSync(STORAGE_KEYS.GITHUB_OWNER);
   },
 
-  async setGitHubOwner(owner: string): Promise<void> {
-    await AsyncStorage.setItem(STORAGE_KEYS.GITHUB_OWNER, owner);
+  setGitHubOwner(owner: string): void {
+    Storage.setItemSync(STORAGE_KEYS.GITHUB_OWNER, owner);
   },
 
-  async clearAll(): Promise<void> {
-    await AsyncStorage.multiRemove([
-      STORAGE_KEYS.GITHUB_PAT,
-      STORAGE_KEYS.REPO_NAME,
-      STORAGE_KEYS.GITHUB_OWNER,
-    ]);
+  clearAll(): void {
+    Storage.removeItemSync(STORAGE_KEYS.GITHUB_PAT);
+    Storage.removeItemSync(STORAGE_KEYS.REPO_NAME);
+    Storage.removeItemSync(STORAGE_KEYS.GITHUB_OWNER);
   },
 };

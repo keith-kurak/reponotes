@@ -23,10 +23,10 @@ export default function FileListScreen() {
   const [showNewFileModal, setShowNewFileModal] = useState(false);
   const [newFileName, setNewFileName] = useState("");
 
-  const loadLocalFiles = async () => {
+  const loadLocalFiles = () => {
     const files = listLocalFiles();
     setLocalFiles(files);
-    const pending = await pendingChanges.getAll();
+    const pending = pendingChanges.getAll();
     setPendingFiles(pending);
   };
 
@@ -58,11 +58,9 @@ export default function FileListScreen() {
 
   const syncMutation = useMutation({
     mutationFn: async () => {
-      const [token, repoName, owner] = await Promise.all([
-        storage.getGitHubPAT(),
-        storage.getRepoName(),
-        storage.getGitHubOwner(),
-      ]);
+      const token = storage.getGitHubPAT();
+      const repoName = storage.getRepoName();
+      const owner = storage.getGitHubOwner();
 
       if (!token) {
         throw new Error(
@@ -86,11 +84,11 @@ export default function FileListScreen() {
             file.path,
           );
           writeLocalFile(file.name, result.content);
-          await fileSha.set(file.name, result.sha);
+          fileSha.set(file.name, result.sha);
         }),
       );
 
-      await loadLocalFiles();
+      loadLocalFiles();
     },
   });
 
