@@ -102,7 +102,9 @@ export default function NoteViewerScreen() {
     onSuccess: () => {
       showToast(
         "success",
-        hasPendingChanges ? "Changes saved to GitHub!" : "File synced successfully!",
+        hasPendingChanges
+          ? "Changes saved to GitHub!"
+          : "File synced successfully!",
       );
     },
     onError: (err) => {
@@ -238,7 +240,9 @@ export default function NoteViewerScreen() {
                   ) : (
                     <Ionicons
                       name={
-                        hasPendingChanges ? "cloud-upload-outline" : "sync-outline"
+                        hasPendingChanges
+                          ? "cloud-upload-outline"
+                          : "sync-outline"
                       }
                       size={24}
                       color="#007AFF"
@@ -274,14 +278,16 @@ export default function NoteViewerScreen() {
             style={styles.scrollView}
             contentContainerStyle={styles.editContent}
           >
-            <TextInput
-              style={styles.textInput}
-              value={editedContent}
-              onChangeText={setEditedContent}
-              multiline
-              autoFocus
-              textAlignVertical="top"
-            />
+            <View style={{ flexGrow: 1, paddingVertical: 16 }}>
+              <TextInput
+                style={styles.textInput}
+                value={editedContent}
+                onChangeText={setEditedContent}
+                multiline
+                autoFocus
+                textAlignVertical="top"
+              />
+            </View>
           </KeyboardAwareScrollView>
         ) : (
           <ScrollView
