@@ -156,10 +156,10 @@ export async function updateFileContent(
   content: string,
   sha: string,
   message: string = `Update ${filePath}`
-): Promise<void> {
+): Promise<string> {
   const encodedContent = btoa(content);
 
-  await makeGitHubRequest(
+  const response = await makeGitHubRequest(
     `/repos/${owner}/${repoName}/contents/${filePath}`,
     token,
     {
@@ -171,4 +171,33 @@ export async function updateFileContent(
       }),
     }
   );
+
+  const data = await response.json();
+  return data.content.sha;
+}
+
+export async function createFileOnGitHub(
+  token: string,
+  repoName: string,
+  owner: string,
+  filePath: string,
+  content: string,
+  message: string = `Create ${filePath}`
+): Promise<string> {
+  const encodedContent = btoa(content);
+
+  const response = await makeGitHubRequest(
+    `/repos/${owner}/${repoName}/contents/${filePath}`,
+    token,
+    {
+      method: 'PUT',
+      body: JSON.stringify({
+        message,
+        content: encodedContent,
+      }),
+    }
+  );
+
+  const data = await response.json();
+  return data.content.sha;
 }

@@ -12,7 +12,9 @@ export function listLocalFiles(): string[] {
   ensureNotesDirectory();
   const items = notesDirectory.list();
   return items
-    .filter((item): item is File => item instanceof File && item.name.endsWith('.md'))
+    .filter((item): item is File =>
+      item instanceof File && (item.name.endsWith('.md') || item.name.endsWith('.txt'))
+    )
     .map(file => file.name)
     .sort();
 }

@@ -14,7 +14,7 @@ import { useLocalSearchParams, Stack } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { readLocalFile, writeLocalFile } from '@/utils/fileSystem';
-import { fetchFileContentWithSha, updateFileContent } from '@/utils/github';
+import { fetchFileContentWithSha, updateFileContent, createFileOnGitHub, GitHubAPIError } from '@/utils/github';
 import { storage } from '@/utils/storage';
 import { pendingChanges, fileSha } from '@/utils/pendingChanges';
 
@@ -86,15 +86,30 @@ export default function NoteViewerScreen() {
       if (hasPendingChanges) {
         // Upload changes to GitHub
         let sha = await fileSha.get(decodedFilename);
+        let newSha: string;
+
         if (!sha) {
-          // Fetch the current SHA from GitHub if we don't have it stored
-          const current = await fetchFileContentWithSha(token, repoName, owner, decodedFilename);
-          sha = current.sha;
+          // Try to fetch the current SHA from GitHub if we don't have it stored
+          try {
+            const current = await fetchFileContentWithSha(token, repoName, owner, decodedFilename);
+            sha = current.sha;
+          } catch (error) {
+            // File doesn't exist on GitHub yet - that's OK, we'll create it
+            if (!(error instanceof GitHubAPIError && error.status === 404)) {
+              throw error;
+            }
+          }
         }
-        await updateFileContent(token, repoName, owner, decodedFilename, content, sha);
-        // Fetch the new SHA after update
-        const result = await fetchFileContentWithSha(token, repoName, owner, decodedFilename);
-        await fileSha.set(decodedFilename, result.sha);
+
+        if (sha) {
+          // Update existing file
+          newSha = await updateFileContent(token, repoName, owner, decodedFilename, content, sha);
+        } else {
+          // Create new file on GitHub
+          newSha = await createFileOnGitHub(token, repoName, owner, decodedFilename, content);
+        }
+
+        await fileSha.set(decodedFilename, newSha);
         await pendingChanges.remove(decodedFilename);
         setHasPendingChanges(false);
       } else {

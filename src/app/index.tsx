@@ -9,8 +9,10 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Modal,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -18,6 +20,8 @@ import {
 export default function FileListScreen() {
   const [localFiles, setLocalFiles] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<string[]>([]);
+  const [showNewFileModal, setShowNewFileModal] = useState(false);
+  const [newFileName, setNewFileName] = useState("");
 
   const loadLocalFiles = async () => {
     const files = listLocalFiles();
@@ -35,6 +39,22 @@ export default function FileListScreen() {
       loadLocalFiles();
     }, []),
   );
+
+  const handleCreateFile = () => {
+    if (!newFileName.trim()) return;
+
+    // Add .md extension if no extension is provided
+    let filename = newFileName.trim();
+    if (!filename.includes(".")) {
+      filename = `${filename}.md`;
+    }
+
+    // Create empty file and navigate to it
+    writeLocalFile(filename, "");
+    setShowNewFileModal(false);
+    setNewFileName("");
+    router.push(`/note/${encodeURIComponent(filename)}`);
+  };
 
   const syncMutation = useMutation({
     mutationFn: async () => {
@@ -132,7 +152,7 @@ export default function FileListScreen() {
           <Ionicons name="folder-open-outline" size={64} color="#ccc" />
           <Text style={styles.emptyText}>No notes yet</Text>
           <Text style={styles.emptyHint}>
-            Tap the sync button to download notes from GitHub
+            Tap the + button to create a new note
           </Text>
         </View>
       ) : (
@@ -143,6 +163,59 @@ export default function FileListScreen() {
           style={styles.list}
         />
       )}
+
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setShowNewFileModal(true)}
+      >
+        <Ionicons name="add" size={28} color="#fff" />
+      </TouchableOpacity>
+
+      <Modal
+        visible={showNewFileModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNewFileModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>New File</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="filename"
+              value={newFileName}
+              onChangeText={setNewFileName}
+              autoFocus
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Text style={styles.modalHint}>
+              .md extension added automatically if none provided
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalButtonCancel}
+                onPress={() => {
+                  setShowNewFileModal(false);
+                  setNewFileName("");
+                }}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalButtonCreate,
+                  !newFileName.trim() && styles.modalButtonDisabled,
+                ]}
+                onPress={handleCreateFile}
+                disabled={!newFileName.trim()}
+              >
+                <Text style={styles.modalButtonCreateText}>Create</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -230,5 +303,80 @@ const styles = StyleSheet.create({
   successText: {
     color: "#2e7d32",
     fontSize: 14,
+  },
+  fab: {
+    position: "absolute",
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#007AFF",
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 24,
+    width: "80%",
+    maxWidth: 320,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 16,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  modalHint: {
+    fontSize: 12,
+    color: "#999",
+    marginBottom: 16,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  modalButtonCancel: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  modalButtonCancelText: {
+    color: "#666",
+    fontSize: 16,
+  },
+  modalButtonCreate: {
+    backgroundColor: "#007AFF",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  modalButtonCreateText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  modalButtonDisabled: {
+    backgroundColor: "#ccc",
   },
 });
