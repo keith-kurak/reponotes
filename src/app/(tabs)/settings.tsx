@@ -5,13 +5,13 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function SettingsScreen() {
@@ -70,7 +70,7 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar style="dark" />
-      <ScrollView style={styles.scrollView}>
+      <KeyboardAwareScrollView style={styles.scrollView}>
         <View style={styles.section}>
           <Text style={styles.label}>GitHub Owner/Username</Text>
           <TextInput
@@ -144,7 +144,7 @@ export default function SettingsScreen() {
             </Text>
           </View>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

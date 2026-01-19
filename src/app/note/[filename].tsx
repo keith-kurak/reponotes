@@ -14,8 +14,6 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,6 +21,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 export default function NoteViewerScreen() {
   const { filename } = useLocalSearchParams<{ filename: string }>();
@@ -194,11 +193,7 @@ export default function NoteViewerScreen() {
         }}
       />
 
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={100}
-      >
+      <View style={styles.container}>
         {syncMutation.isError && (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>
@@ -230,14 +225,19 @@ export default function NoteViewerScreen() {
             <Text style={styles.errorMessage}>{error}</Text>
           </View>
         ) : isEditing ? (
-          <TextInput
-            style={styles.textInput}
-            value={editedContent}
-            onChangeText={setEditedContent}
-            multiline
-            autoFocus
-            textAlignVertical="top"
-          />
+          <KeyboardAwareScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.editContent}
+          >
+            <TextInput
+              style={styles.textInput}
+              value={editedContent}
+              onChangeText={setEditedContent}
+              multiline
+              autoFocus
+              textAlignVertical="top"
+            />
+          </KeyboardAwareScrollView>
         ) : (
           <ScrollView
             style={styles.scrollView}
@@ -246,7 +246,7 @@ export default function NoteViewerScreen() {
             <Text style={styles.text}>{content}</Text>
           </ScrollView>
         )}
-      </KeyboardAvoidingView>
+      </View>
     </>
   );
 }
@@ -300,6 +300,9 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
   },
+  editContent: {
+    flexGrow: 1,
+  },
   text: {
     fontSize: 16,
     lineHeight: 24,
@@ -307,7 +310,8 @@ const styles = StyleSheet.create({
     fontFamily: "monospace",
   },
   textInput: {
-    flex: 1,
+    flexGrow: 1,
+    minHeight: "100%",
     padding: 16,
     fontSize: 16,
     lineHeight: 24,
