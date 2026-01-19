@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -279,15 +279,7 @@ export default function NoteViewerScreen() {
             contentContainerStyle={styles.editContent}
           >
             <View style={{ flexGrow: 1, paddingVertical: 16 }}>
-              <TextInput
-                style={styles.textInput}
-                value={editedContent}
-                onChangeText={setEditedContent}
-                multiline
-                autoFocus
-                scrollEnabled={false}
-                textAlignVertical="top"
-              />
+              <TextInputWrapper setEditedContent={setEditedContent} />
             </View>
           </KeyboardAwareScrollView>
         ) : (
@@ -302,6 +294,25 @@ export default function NoteViewerScreen() {
     </>
   );
 }
+
+const TextInputWrapper = memo(function TextInputWrapper(props: {
+  setEditedContent: (text: string) => void;
+}) {
+  const { setEditedContent } = props;
+
+  console.log("Rendering TextInputWrapper");
+  return (
+    <TextInput
+      style={styles.textInput}
+      onChangeText={setEditedContent}
+      multiline
+      autoFocus
+      scrollEnabled={false}
+      textAlignVertical="top"
+      defaultValue=""
+    />
+  );
+});
 
 const styles = StyleSheet.create({
   container: {
