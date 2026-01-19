@@ -1,3 +1,4 @@
+import { Toast } from "@/components/Toast";
 import { readLocalFile, writeLocalFile } from "@/utils/fileSystem";
 import {
   createFileOnGitHub,
@@ -5,13 +6,14 @@ import {
   GitHubAPIError,
   updateFileContent,
 } from "@/utils/github";
+import { noteMetadata } from "@/utils/noteMetadata";
 import { fileSha, pendingChanges } from "@/utils/pendingChanges";
 import { storage } from "@/utils/storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -31,8 +33,25 @@ export default function NoteViewerScreen() {
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
+  const [toast, setToast] = useState<{
+    visible: boolean;
+    type: "success" | "error";
+    message: string;
+  }>({ visible: false, type: "success", message: "" });
 
   const decodedFilename = filename ? decodeURIComponent(filename) : "";
+
+  const showToast = useCallback(
+    (type: "success" | "error", message: string) => {
+      setToast({ visible: true, type, message });
+    },
+    [],
+  );
+
+  const hideToast = useCallback(() => {
+    setToast((prev) => ({ ...prev, visible: false }));
+  }, []);
 
   const loadContent = () => {
     if (!filename) return;
@@ -45,6 +64,8 @@ export default function NoteViewerScreen() {
       setEditedContent(fileContent);
       const isPending = pendingChanges.has(decodedFilename);
       setHasPendingChanges(isPending);
+      const pinned = noteMetadata.isPinned(decodedFilename);
+      setIsPinned(pinned);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load file");
     } finally {
@@ -71,7 +92,25 @@ export default function NoteViewerScreen() {
     setIsEditing(false);
   };
 
+  const handleTogglePin = () => {
+    const newPinned = !isPinned;
+    noteMetadata.setPinned(decodedFilename, newPinned);
+    setIsPinned(newPinned);
+  };
+
   const syncMutation = useMutation({
+    onSuccess: () => {
+      showToast(
+        "success",
+        hasPendingChanges ? "Changes saved to GitHub!" : "File synced successfully!",
+      );
+    },
+    onError: (err) => {
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Failed to sync file",
+      );
+    },
     mutationFn: async () => {
       if (!filename) throw new Error("No filename provided");
 
@@ -161,7 +200,22 @@ export default function NoteViewerScreen() {
           title: filename ? decodeURIComponent(filename) : "Note",
           headerRight: () => (
             <View style={styles.headerButtons}>
-              {hasPendingChanges && <View style={styles.pendingDot} />}
+              {hasPendingChanges && !isEditing && (
+                <View style={styles.pendingDot} />
+              )}
+              {!isEditing && (
+                <TouchableOpacity
+                  onPress={handleTogglePin}
+                  disabled={loading}
+                  style={styles.headerButton}
+                >
+                  <Ionicons
+                    name={isPinned ? "pin" : "pin-outline"}
+                    size={22}
+                    color={isPinned ? "#007AFF" : "#999"}
+                  />
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 onPress={isEditing ? handleFinishEditing : handleStartEditing}
                 disabled={loading || syncMutation.isPending}
@@ -173,46 +227,37 @@ export default function NoteViewerScreen() {
                   color="#007AFF"
                 />
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => syncMutation.mutate()}
-                disabled={syncMutation.isPending || isEditing}
-                style={styles.headerButton}
-              >
-                {syncMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#007AFF" />
-                ) : (
-                  <Ionicons
-                    name="sync-outline"
-                    size={24}
-                    color={isEditing ? "#ccc" : "#007AFF"}
-                  />
-                )}
-              </TouchableOpacity>
+              {!isEditing && (
+                <TouchableOpacity
+                  onPress={() => syncMutation.mutate()}
+                  disabled={syncMutation.isPending}
+                  style={styles.headerButton}
+                >
+                  {syncMutation.isPending ? (
+                    <ActivityIndicator size="small" color="#007AFF" />
+                  ) : (
+                    <Ionicons
+                      name={
+                        hasPendingChanges ? "cloud-upload-outline" : "sync-outline"
+                      }
+                      size={24}
+                      color="#007AFF"
+                    />
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           ),
         }}
       />
 
       <View style={styles.container}>
-        {syncMutation.isError && (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>
-              {syncMutation.error instanceof Error
-                ? syncMutation.error.message
-                : "Failed to sync file"}
-            </Text>
-          </View>
-        )}
-
-        {syncMutation.isSuccess && (
-          <View style={styles.successBox}>
-            <Text style={styles.successText}>
-              {hasPendingChanges
-                ? "Changes saved to GitHub!"
-                : "File synced successfully!"}
-            </Text>
-          </View>
-        )}
+        <Toast
+          visible={toast.visible}
+          type={toast.type}
+          message={toast.message}
+          onDismiss={hideToast}
+        />
 
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -317,31 +362,5 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: "#333",
     fontFamily: "monospace",
-  },
-  errorBox: {
-    backgroundColor: "#ffebee",
-    padding: 12,
-    marginHorizontal: 16,
-    marginTop: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#f44336",
-  },
-  errorText: {
-    color: "#c62828",
-    fontSize: 14,
-  },
-  successBox: {
-    backgroundColor: "#e8f5e9",
-    padding: 12,
-    marginHorizontal: 16,
-    marginTop: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#4caf50",
-  },
-  successText: {
-    color: "#2e7d32",
-    fontSize: 14,
   },
 });

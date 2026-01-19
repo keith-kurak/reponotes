@@ -1,48 +1,43 @@
-import Storage from 'expo-sqlite/kv-store';
+import { noteMetadata } from "./noteMetadata";
 
-const PENDING_CHANGES_KEY = 'pending_changes';
-const FILE_SHA_PREFIX = 'file_sha_';
+// These exports maintain backwards compatibility with existing code
+// while using the new unified metadata storage
 
 export const pendingChanges = {
   getAll(): string[] {
-    const data = Storage.getItemSync(PENDING_CHANGES_KEY);
-    return data ? JSON.parse(data) : [];
+    return noteMetadata.getAllPendingFiles();
   },
 
   has(filename: string): boolean {
-    const pending = this.getAll();
-    return pending.includes(filename);
+    return noteMetadata.hasPendingChanges(filename);
   },
 
   add(filename: string): void {
-    const pending = this.getAll();
-    if (!pending.includes(filename)) {
-      pending.push(filename);
-      Storage.setItemSync(PENDING_CHANGES_KEY, JSON.stringify(pending));
-    }
+    noteMetadata.setPendingChanges(filename, true);
   },
 
   remove(filename: string): void {
-    const pending = this.getAll();
-    const filtered = pending.filter(f => f !== filename);
-    Storage.setItemSync(PENDING_CHANGES_KEY, JSON.stringify(filtered));
+    noteMetadata.setPendingChanges(filename, false);
   },
 
   clear(): void {
-    Storage.setItemSync(PENDING_CHANGES_KEY, JSON.stringify([]));
+    const all = noteMetadata.getAll();
+    for (const filename of Object.keys(all)) {
+      noteMetadata.setPendingChanges(filename, false);
+    }
   },
 };
 
 export const fileSha = {
   get(filename: string): string | null {
-    return Storage.getItemSync(`${FILE_SHA_PREFIX}${filename}`);
+    return noteMetadata.getSha(filename) ?? null;
   },
 
   set(filename: string, sha: string): void {
-    Storage.setItemSync(`${FILE_SHA_PREFIX}${filename}`, sha);
+    noteMetadata.setSha(filename, sha);
   },
 
   remove(filename: string): void {
-    Storage.removeItemSync(`${FILE_SHA_PREFIX}${filename}`);
+    noteMetadata.update(filename, { sha: undefined });
   },
 };

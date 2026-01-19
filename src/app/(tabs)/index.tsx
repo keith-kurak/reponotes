@@ -1,4 +1,5 @@
 import { listLocalFiles } from "@/utils/fileSystem";
+import { noteMetadata } from "@/utils/noteMetadata";
 import { pendingChanges } from "@/utils/pendingChanges";
 import { Ionicons } from "@expo/vector-icons";
 import { Link, useFocusEffect } from "expo-router";
@@ -15,12 +16,18 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function DashboardScreen() {
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
+  const [pinnedFiles, setPinnedFiles] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<string[]>([]);
 
   const loadData = () => {
     const files = listLocalFiles();
-    // Show the 5 most recent files (they're already sorted)
-    setRecentFiles(files.slice(0, 5));
+    const pinned = noteMetadata
+      .getAllPinnedFiles()
+      .filter((f) => files.includes(f));
+    setPinnedFiles(pinned);
+    // Show the 5 most recent files (excluding pinned ones)
+    const nonPinnedFiles = files.filter((f) => !pinned.includes(f));
+    setRecentFiles(nonPinnedFiles.slice(0, 5));
     const pending = pendingChanges.getAll();
     setPendingFiles(pending);
   };
@@ -35,9 +42,32 @@ export default function DashboardScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar style="dark" />
       <ScrollView style={styles.scrollView}>
+        {pinnedFiles.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Pinned</Text>
+            {pinnedFiles.map((file) => {
+              const hasPending = pendingFiles.includes(file);
+              return (
+                <Link
+                  key={file}
+                  href={`/note/${encodeURIComponent(file)}`}
+                  asChild
+                >
+                  <TouchableOpacity style={styles.pinnedItem}>
+                    <Ionicons name="pin" size={18} color="#007AFF" />
+                    <Text style={styles.fileName}>{file}</Text>
+                    {hasPending && <View style={styles.pendingDot} />}
+                    <Ionicons name="chevron-forward" size={16} color="#ccc" />
+                  </TouchableOpacity>
+                </Link>
+              );
+            })}
+          </View>
+        )}
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Files</Text>
-          {recentFiles.length === 0 ? (
+          {recentFiles.length === 0 && pinnedFiles.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="document-text-outline" size={48} color="#ccc" />
               <Text style={styles.emptyText}>No files yet</Text>
@@ -45,6 +75,8 @@ export default function DashboardScreen() {
                 Go to Files tab to sync or create notes
               </Text>
             </View>
+          ) : recentFiles.length === 0 ? (
+            <Text style={styles.emptyHint}>No other recent files</Text>
           ) : (
             recentFiles.map((file) => {
               const hasPending = pendingFiles.includes(file);
@@ -145,6 +177,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 12,
     backgroundColor: "#f9f9f9",
+    borderRadius: 8,
+    marginBottom: 8,
+    gap: 10,
+  },
+  pinnedItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    backgroundColor: "#e3f2fd",
     borderRadius: 8,
     marginBottom: 8,
     gap: 10,
