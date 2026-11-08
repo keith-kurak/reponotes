@@ -2,7 +2,7 @@ import { testConnection, TestConnectionResult } from "@/utils/github";
 import { storage } from "@/utils/storage";
 import { useMutation } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   StyleSheet,
@@ -15,25 +15,16 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function SettingsScreen() {
-  const [githubPAT, setGithubPAT] = useState("");
-  const [repoName, setRepoName] = useState("reponotes-notebook");
-  const [owner, setOwner] = useState("");
+  const [githubPAT, setGithubPAT] = useState(
+    () => storage.getGitHubPAT() || "",
+  );
+  const [repoName, setRepoName] = useState(
+    () => storage.getRepoName() || "reponotes-notebook",
+  );
+  const [owner, setOwner] = useState(() => storage.getGitHubOwner() || "");
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(
     null,
   );
-
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  const loadSettings = () => {
-    const pat = storage.getGitHubPAT();
-    const repo = storage.getRepoName();
-    const savedOwner = storage.getGitHubOwner();
-    if (pat) setGithubPAT(pat);
-    if (repo) setRepoName(repo);
-    if (savedOwner) setOwner(savedOwner);
-  };
 
   const saveSettings = () => {
     storage.setGitHubPAT(githubPAT);

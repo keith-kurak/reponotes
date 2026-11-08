@@ -7,9 +7,9 @@
     "icon": "./assets/images/icon.png",
     "scheme": "reponotes",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.keithkurak.reponotes"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +18,6 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.keithkurak.reponotes"
     },
@@ -44,7 +43,9 @@
       "expo-image",
       "expo-web-browser",
       "expo-sqlite",
-      "@rnrepo/expo-config-plugin"
+      "@rnrepo/expo-config-plugin",
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -53,15 +54,15 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "a1d778e1-9a66-4d23-9e6e-c0b8be7ecbbc"
+        "projectId": "5f9c8c65-e8d2-4c62-b9a5-da436f895917"
       }
     },
-    "owner": "expo-production",
+    "owner": "keithco",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/a1d778e1-9a66-4d23-9e6e-c0b8be7ecbbc"
+      "url": "https://u.expo.dev/5f9c8c65-e8d2-4c62-b9a5-da436f895917"
     }
   }
 }

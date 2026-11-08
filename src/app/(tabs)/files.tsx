@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { Link, router, useFocusEffect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -31,10 +31,6 @@ export default function FileListScreen() {
     const pending = pendingChanges.getAll();
     setPendingFiles(pending);
   };
-
-  useEffect(() => {
-    loadLocalFiles();
-  }, []);
 
   useFocusEffect(
     useCallback(() => {
