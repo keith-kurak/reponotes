@@ -4,7 +4,7 @@ A mobile notes app that syncs markdown files with a GitHub repository.
 
 ## Tech Stack
 
-- **Framework**: Expo SDK 55 (canary) with Expo Router
+- **Framework**: Expo SDK 58 with Expo Router
 - **Language**: TypeScript
 - **UI**: React Native with Ionicons
 - **State Management**: React Query for async operations, React useState for local state
@@ -73,3 +73,21 @@ bun run lint       # Run ESLint
 - Imports sorted alphabetically
 - Components use function declarations
 - Styles defined with StyleSheet.create at bottom of file
+
+## App variants
+
+`APP_VARIANT` selects the variant: unset = development (`NOTE-DEV`), `preview`, `production`.
+EAS gets it from the EAS environment of the build profile. Do not add it to `eas.json`.
+Runtime version policy: `appVersion`.
+
+## Cloud simulator skills
+
+- `eas-sim-dev`: run and drive the app on an iOS cloud simulator with Metro.
+- `eas-sim-verify-pr-ios` / `eas-sim-verify-pr-android`: validate a PR and comment the result.
+- `eas-sim-preview-link`: post an iOS web preview link on a PR.
+- `apk-session-link`: build a preview APK and make an Android cloud emulator session link.
+
+## README
+
+Keep `README.md` in this order: description, start the dev server, Features (short bullets), TODO (next major goals).
+When a change adds a feature or completes a goal, update Features and TODO in the same change.
