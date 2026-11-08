@@ -30,10 +30,16 @@ export default function RootLayout() {
           value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
         >
           <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="note/[filename]" options={{ title: "Note" }} />
+            <Stack.Screen
+              name="(tabs)"
+              options={{ headerShown: false, title: "Notes" }}
+            />
+            <Stack.Screen
+              name="note/[...path]"
+              options={{ title: "Note", headerBackButtonDisplayMode: "minimal" }}
+            />
           </Stack>
-          <StatusBar style="dark" />
+          <StatusBar style="auto" />
         </ThemeProvider>
       </QueryClientProvider>
     </KeyboardProvider>

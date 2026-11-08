@@ -1,11 +1,11 @@
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
-import { NativeTabs } from "expo-router/unstable-native-tabs";
+import { NativeTabs } from "expo-router/native-tabs";
 import { Platform } from "react-native";
 
 export default function TabLayout() {
   return (
     <NativeTabs>
-      <NativeTabs.Trigger name="index">
+      <NativeTabs.Trigger name="index" accessibilityLabel="Home">
         {Platform.select({
           ios: <NativeTabs.Trigger.Icon sf="house" />,
           android: (
@@ -21,9 +21,9 @@ export default function TabLayout() {
         })}
         <NativeTabs.Trigger.Label hidden>Home</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="files">
+      <NativeTabs.Trigger name="files" accessibilityLabel="Files">
         {Platform.select({
-          ios: <NativeTabs.Trigger.Icon sf="house" />,
+          ios: <NativeTabs.Trigger.Icon sf="folder" />,
           android: (
             <NativeTabs.Trigger.Icon
               src={
@@ -37,9 +37,9 @@ export default function TabLayout() {
         })}
         <NativeTabs.Trigger.Label hidden>Files</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="settings">
+      <NativeTabs.Trigger name="settings" accessibilityLabel="Settings">
         {Platform.select({
-          ios: <NativeTabs.Trigger.Icon sf="house" />,
+          ios: <NativeTabs.Trigger.Icon sf="gearshape" />,
           android: (
             <NativeTabs.Trigger.Icon
               src={

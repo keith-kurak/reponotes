@@ -1,10 +1,11 @@
+import { AppColors, useAppColors } from "@/constants/colors";
 import { testConnection, TestConnectionResult } from "@/utils/github";
 import { storage } from "@/utils/storage";
 import { useMutation } from "@tanstack/react-query";
-import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Keyboard,
   StyleSheet,
   Text,
   TextInput,
@@ -15,7 +16,13 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function SettingsScreen() {
-  const [githubPAT, setGithubPAT] = useState(
+  const colors = useAppColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  // The token field is write-only: it starts empty and is cleared after each
+  // save. An empty field keeps the saved token. This also stops iOS from
+  // offering to save the token as a password when the screen changes.
+  const [githubPAT, setGithubPAT] = useState("");
+  const [savedToken, setSavedToken] = useState(
     () => storage.getGitHubPAT() || "",
   );
   const [repoName, setRepoName] = useState(
@@ -26,15 +33,10 @@ export default function SettingsScreen() {
     null,
   );
 
-  const saveSettings = () => {
-    storage.setGitHubPAT(githubPAT);
-    storage.setRepoName(repoName);
-    storage.setGitHubOwner(owner);
-  };
-
   const testMutation = useMutation({
     mutationFn: async () => {
-      if (!githubPAT.trim()) {
+      const token = githubPAT.trim() || savedToken;
+      if (!token) {
         throw new Error("GitHub PAT is required");
       }
       if (!owner.trim()) {
@@ -44,8 +46,16 @@ export default function SettingsScreen() {
         throw new Error("Repository name is required");
       }
 
-      saveSettings();
-      return await testConnection(githubPAT, repoName, owner);
+      storage.setGitHubPAT(token);
+      storage.setRepoName(repoName.trim());
+      storage.setGitHubOwner(owner.trim());
+      setSavedToken(token);
+      setGithubPAT("");
+      return await testConnection({
+        token,
+        owner: owner.trim(),
+        repoName: repoName.trim(),
+      });
     },
     onSuccess: (result) => {
       setTestResult(result);
@@ -60,8 +70,11 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <StatusBar style="dark" />
-      <KeyboardAwareScrollView style={styles.scrollView}>
+      <KeyboardAwareScrollView
+        style={styles.scrollView}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
         <View style={styles.section}>
           <Text style={styles.label}>GitHub Owner/Username</Text>
           <TextInput
@@ -71,6 +84,10 @@ export default function SettingsScreen() {
             placeholder="your-github-username"
             autoCapitalize="none"
             autoCorrect={false}
+            autoComplete="off"
+            textContentType="none"
+            placeholderTextColor={colors.textTertiary}
+            accessibilityLabel="GitHub owner or username"
           />
         </View>
 
@@ -83,6 +100,10 @@ export default function SettingsScreen() {
             placeholder="reponotes-notebook"
             autoCapitalize="none"
             autoCorrect={false}
+            autoComplete="off"
+            textContentType="none"
+            placeholderTextColor={colors.textTertiary}
+            accessibilityLabel="Repository name"
           />
         </View>
 
@@ -92,14 +113,22 @@ export default function SettingsScreen() {
             style={styles.input}
             value={githubPAT}
             onChangeText={setGithubPAT}
-            placeholder="ghp_xxxxxxxxxxxx"
+            placeholder={
+              savedToken
+                ? `Saved token ending in …${savedToken.slice(-4)}`
+                : "github_pat_xxxxxxxxxxxx"
+            }
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
+            autoComplete="off"
+            textContentType="oneTimeCode"
+            placeholderTextColor={colors.textTertiary}
+            accessibilityLabel="GitHub personal access token"
           />
           <Text style={styles.hint}>
-            Generate a PAT with &apos;repo&apos; scope at
-            github.com/settings/tokens
+            Create a fine-grained token at github.com/settings/tokens with
+            access to this repository and Contents: Read and write.
           </Text>
         </View>
 
@@ -108,13 +137,17 @@ export default function SettingsScreen() {
             styles.button,
             testMutation.isPending && styles.buttonDisabled,
           ]}
-          onPress={() => testMutation.mutate()}
+          onPress={() => {
+            Keyboard.dismiss();
+            testMutation.mutate();
+          }}
           disabled={testMutation.isPending}
+          accessibilityRole="button"
         >
           {testMutation.isPending ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.onTint} />
           ) : (
-            <Text style={styles.buttonText}>Test Connection</Text>
+            <Text style={styles.buttonText}>Save and Test Connection</Text>
           )}
         </TouchableOpacity>
 
@@ -140,73 +173,76 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  scrollView: {
-    flex: 1,
-    padding: 16,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 8,
-    color: "#333",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: "#f9f9f9",
-  },
-  hint: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 4,
-  },
-  button: {
-    backgroundColor: "#007AFF",
-    padding: 16,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    backgroundColor: "#999",
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  resultBox: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  successBox: {
-    backgroundColor: "#e8f5e9",
-    borderColor: "#4caf50",
-  },
-  errorBox: {
-    backgroundColor: "#ffebee",
-    borderColor: "#f44336",
-  },
-  resultText: {
-    fontSize: 14,
-  },
-  successText: {
-    color: "#2e7d32",
-  },
-  errorText: {
-    color: "#c62828",
-  },
-});
+function createStyles(c: AppColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    scrollView: {
+      flex: 1,
+      padding: 16,
+    },
+    section: {
+      marginBottom: 24,
+    },
+    label: {
+      fontSize: 16,
+      fontWeight: "600",
+      marginBottom: 8,
+      color: c.text,
+    },
+    input: {
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.inputBorder,
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16,
+      backgroundColor: c.inputBackground,
+    },
+    hint: {
+      fontSize: 12,
+      color: c.textSecondary,
+      marginTop: 4,
+    },
+    button: {
+      backgroundColor: c.tint,
+      padding: 16,
+      borderRadius: 8,
+      alignItems: "center",
+      marginTop: 8,
+    },
+    buttonDisabled: {
+      backgroundColor: c.disabled,
+    },
+    buttonText: {
+      color: c.onTint,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    resultBox: {
+      marginTop: 16,
+      padding: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+    },
+    successBox: {
+      backgroundColor: c.successBackground,
+      borderColor: c.successBorder,
+    },
+    errorBox: {
+      backgroundColor: c.errorBackground,
+      borderColor: c.errorBorder,
+    },
+    resultText: {
+      fontSize: 14,
+    },
+    successText: {
+      color: c.successText,
+    },
+    errorText: {
+      color: c.errorText,
+    },
+  });
+}

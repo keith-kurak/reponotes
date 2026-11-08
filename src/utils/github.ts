@@ -1,10 +1,22 @@
-const GITHUB_API_BASE = 'https://api.github.com';
+import { decodeBase64Utf8, encodeBase64Utf8 } from "./base64";
+
+const GITHUB_API_BASE = "https://api.github.com";
+
+export interface GitHubConfig {
+  token: string;
+  owner: string;
+  repoName: string;
+}
 
 export interface GitHubFile {
-  name: string;
   path: string;
   sha: string;
   size: number;
+}
+
+export interface FileContentResult {
+  content: string;
+  sha: string;
 }
 
 export interface TestConnectionResult {
@@ -13,191 +25,220 @@ export interface TestConnectionResult {
 }
 
 export class GitHubAPIError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    public githubMessage: string,
+  ) {
     super(message);
-    this.name = 'GitHubAPIError';
+    this.name = "GitHubAPIError";
   }
+}
+
+/** Thrown when GitHub cannot be reached (offline, DNS, timeout). */
+export class NetworkError extends Error {
+  constructor() {
+    super(
+      "Cannot reach GitHub. Check your connection. Your changes are saved on this device.",
+    );
+    this.name = "NetworkError";
+  }
+}
+
+export function isNetworkError(error: unknown): boolean {
+  return error instanceof NetworkError;
+}
+
+function friendlyMessage(status: number, githubMessage: string): string {
+  switch (status) {
+    case 401:
+      return "GitHub token is invalid or expired. Update it in Settings.";
+    case 403:
+      if (/rate limit/i.test(githubMessage)) {
+        return "GitHub rate limit reached. Try again later.";
+      }
+      return "The GitHub token does not have permission for this repository. It needs Contents: Read and write.";
+    case 404:
+      return "Not found on GitHub. Check the owner and repository name in Settings.";
+    case 409:
+      if (/empty/i.test(githubMessage)) {
+        return "The repository is empty.";
+      }
+      return "This file changed on GitHub since your last sync.";
+    case 422:
+      return `GitHub rejected the request: ${githubMessage}`;
+    default:
+      return status >= 500
+        ? "GitHub is not available right now. Try again later."
+        : `GitHub error ${status}: ${githubMessage}`;
+  }
+}
+
+/** Encodes each path segment so names with spaces, "#" or "?" work. */
+function encodePath(path: string): string {
+  return path.split("/").map(encodeURIComponent).join("/");
+}
+
+function repoPath(config: GitHubConfig): string {
+  return `/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repoName)}`;
 }
 
 async function makeGitHubRequest(
   path: string,
   token: string,
-  options: { method?: 'GET' | 'POST' | 'PUT'; body?: string } = {}
+  options: { method?: "GET" | "PUT" | "DELETE"; body?: object } = {},
 ): Promise<Response> {
-  const { method = 'GET', body } = options;
-  const response = await fetch(`${GITHUB_API_BASE}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github.v3+json',
-      ...(body && { 'Content-Type': 'application/json' }),
-    },
-    ...(body && { body }),
-  });
+  const { method = "GET", body } = options;
+  let response: Response;
+  try {
+    response = await fetch(`${GITHUB_API_BASE}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        ...(body && { "Content-Type": "application/json" }),
+      },
+      ...(body && { body: JSON.stringify(body) }),
+    });
+  } catch {
+    throw new NetworkError();
+  }
 
   if (!response.ok) {
-    const error = await response.text();
+    const text = await response.text();
+    let githubMessage = text;
+    try {
+      githubMessage = JSON.parse(text).message ?? text;
+    } catch {
+      // Body is not JSON; use the raw text.
+    }
     throw new GitHubAPIError(
       response.status,
-      `GitHub API error: ${response.status} - ${error}`
+      friendlyMessage(response.status, githubMessage),
+      githubMessage,
     );
   }
 
   return response;
 }
 
+export function isConflictError(error: unknown): boolean {
+  return (
+    error instanceof GitHubAPIError &&
+    (error.status === 409 ||
+      (error.status === 422 && /sha/i.test(error.githubMessage)))
+  );
+}
+
+export function isNotFoundError(error: unknown): boolean {
+  return error instanceof GitHubAPIError && error.status === 404;
+}
+
 export async function testConnection(
-  token: string,
-  repoName: string,
-  owner: string
+  config: GitHubConfig,
 ): Promise<TestConnectionResult> {
   try {
-    const response = await makeGitHubRequest(`/repos/${owner}/${repoName}`, token);
-    await response.json();
-    return {
-      success: true,
-      message: 'Successfully connected to repository',
-    };
-  } catch (error) {
-    if (error instanceof GitHubAPIError) {
-      if (error.status === 401) {
-        return {
-          success: false,
-          message: 'Invalid GitHub token',
-        };
-      }
-      if (error.status === 404) {
-        return {
-          success: false,
-          message: 'Repository not found',
-        };
-      }
+    const response = await makeGitHubRequest(repoPath(config), config.token);
+    const repo = await response.json();
+    if (repo.permissions && !repo.permissions.push) {
       return {
         success: false,
-        message: `Error: ${error.message}`,
+        message:
+          "Connected, but the token cannot write to this repository. It needs Contents: Read and write.",
       };
     }
+    if (repo.size === 0) {
+      return {
+        success: true,
+        message:
+          "Connected. The repository is empty. Create a note to make the first commit.",
+      };
+    }
+    return { success: true, message: "Connected to the repository." };
+  } catch (error) {
     return {
       success: false,
-      message: 'Network error: Unable to connect',
+      message: error instanceof Error ? error.message : "Unable to connect.",
     };
   }
 }
 
+async function getDefaultBranch(config: GitHubConfig): Promise<string> {
+  const response = await makeGitHubRequest(repoPath(config), config.token);
+  const repo = await response.json();
+  return repo.default_branch ?? "main";
+}
+
+/** Lists all markdown files in the repository. An empty repository returns []. */
 export async function listMarkdownFiles(
-  token: string,
-  repoName: string,
-  owner: string,
-  branch: string = 'main'
+  config: GitHubConfig,
 ): Promise<GitHubFile[]> {
-  const response = await makeGitHubRequest(
-    `/repos/${owner}/${repoName}/git/trees/${branch}?recursive=1`,
-    token
-  );
+  const branch = await getDefaultBranch(config);
+  let data: any;
+  try {
+    const response = await makeGitHubRequest(
+      `${repoPath(config)}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+      config.token,
+    );
+    data = await response.json();
+  } catch (error) {
+    // 409 = empty repository, 404 = the branch has no commits yet.
+    if (
+      error instanceof GitHubAPIError &&
+      (error.status === 409 || error.status === 404)
+    ) {
+      return [];
+    }
+    throw error;
+  }
 
-  const data = await response.json();
-
-  const markdownFiles = data.tree
-    .filter((item: any) => item.type === 'blob' && item.path.endsWith('.md'))
+  return data.tree
+    .filter((item: any) => item.type === "blob" && item.path.endsWith(".md"))
     .map((item: any) => ({
-      name: item.path.split('/').pop() || item.path,
       path: item.path,
       sha: item.sha,
       size: item.size,
     }));
-
-  return markdownFiles;
-}
-
-export interface FileContentResult {
-  content: string;
-  sha: string;
-}
-
-export async function fetchFileContent(
-  token: string,
-  repoName: string,
-  owner: string,
-  filePath: string
-): Promise<string> {
-  const result = await fetchFileContentWithSha(token, repoName, owner, filePath);
-  return result.content;
 }
 
 export async function fetchFileContentWithSha(
-  token: string,
-  repoName: string,
-  owner: string,
-  filePath: string
+  config: GitHubConfig,
+  filePath: string,
 ): Promise<FileContentResult> {
   const response = await makeGitHubRequest(
-    `/repos/${owner}/${repoName}/contents/${filePath}`,
-    token
+    `${repoPath(config)}/contents/${encodePath(filePath)}`,
+    config.token,
   );
-
   const data = await response.json();
 
-  if (data.content) {
-    const decoded = atob(data.content.replace(/\n/g, ''));
-    return {
-      content: decoded,
-      sha: data.sha,
-    };
+  if (typeof data.content === "string") {
+    return { content: decodeBase64Utf8(data.content), sha: data.sha };
   }
-
-  throw new Error('File content not found');
+  throw new Error("File content not found.");
 }
 
-export async function updateFileContent(
-  token: string,
-  repoName: string,
-  owner: string,
+/**
+ * Creates or updates a file. Pass the current SHA to update an existing file,
+ * or no SHA to create a new one. Returns the new SHA.
+ */
+export async function putFileContent(
+  config: GitHubConfig,
   filePath: string,
   content: string,
-  sha: string,
-  message: string = `Update ${filePath}`
+  sha?: string,
 ): Promise<string> {
-  const encodedContent = btoa(content);
-
   const response = await makeGitHubRequest(
-    `/repos/${owner}/${repoName}/contents/${filePath}`,
-    token,
+    `${repoPath(config)}/contents/${encodePath(filePath)}`,
+    config.token,
     {
-      method: 'PUT',
-      body: JSON.stringify({
-        message,
-        content: encodedContent,
-        sha,
-      }),
-    }
+      method: "PUT",
+      body: {
+        message: `${sha ? "Update" : "Create"} ${filePath}`,
+        content: encodeBase64Utf8(content),
+        ...(sha && { sha }),
+      },
+    },
   );
-
-  const data = await response.json();
-  return data.content.sha;
-}
-
-export async function createFileOnGitHub(
-  token: string,
-  repoName: string,
-  owner: string,
-  filePath: string,
-  content: string,
-  message: string = `Create ${filePath}`
-): Promise<string> {
-  const encodedContent = btoa(content);
-
-  const response = await makeGitHubRequest(
-    `/repos/${owner}/${repoName}/contents/${filePath}`,
-    token,
-    {
-      method: 'PUT',
-      body: JSON.stringify({
-        message,
-        content: encodedContent,
-      }),
-    }
-  );
-
   const data = await response.json();
   return data.content.sha;
 }

@@ -6,11 +6,12 @@ A mobile notes app that syncs markdown files with a GitHub repository.
 
 - **Framework**: Expo SDK 58 with Expo Router
 - **Language**: TypeScript
-- **UI**: React Native with Ionicons
+- **UI**: React Native with Ionicons; notes render with `react-native-enriched-markdown`
+- **Colors**: use tokens from `src/constants/colors.ts` (`useAppColors`), not hex literals; light and dark mode
 - **State Management**: React Query for async operations, React useState for local state
 - **Storage**: expo-sqlite/kv-store for local metadata (synchronous API)
 - **File System**: expo-file-system for local note storage
-- **Navigation**: expo-router with native tabs (`expo-router/unstable-native-tabs`)
+- **Navigation**: expo-router with native tabs (`expo-router/native-tabs`)
 
 ## Project Structure
 
@@ -23,7 +24,7 @@ src/
 │   │   ├── files.tsx      # File list with sync
 │   │   └── settings.tsx   # GitHub configuration
 │   ├── note/
-│   │   └── [filename].tsx # Note viewer/editor
+│   │   └── [...path].tsx  # Note viewer/editor (path keeps folders)
 │   └── _layout.tsx        # Root layout with providers
 ├── components/            # Reusable components
 │   └── Toast.tsx         # Auto-dismissing toast notifications
@@ -32,7 +33,9 @@ src/
 │   ├── github.ts         # GitHub API operations
 │   ├── noteMetadata.ts   # Per-file metadata storage
 │   ├── pendingChanges.ts # Tracks unsaved changes (uses noteMetadata)
-│   └── storage.ts        # App settings storage
+│   ├── routes.ts         # noteHref() link helper for notes
+│   ├── storage.ts        # App settings storage
+│   └── sync.ts           # Sync, upload, conflict resolution
 ├── hooks/                 # Custom React hooks
 └── constants/            # App constants
 ```
@@ -47,6 +50,10 @@ src/
 
 ### GitHub Sync
 
+- Notes are identified by their repo path (e.g. `projects/plan.md`) everywhere: local files, metadata keys, and routes
+- Sync logic lives in `src/utils/sync.ts`; screens do not call the GitHub API directly
+- Sync skips notes with pending changes; a stale SHA on upload is a conflict that the user resolves
+- Use `src/utils/base64.ts` for file content (UTF-8 safe); do not use `atob`/`btoa` directly
 - Files are synced individually via GitHub Contents API
 - SHA tracking for conflict-free updates
 - New files created without SHA, existing files updated with SHA
@@ -54,7 +61,7 @@ src/
 
 ### Navigation
 
-- Uses `NativeTabs` from `expo-router/unstable-native-tabs` for native tab bar
+- Uses `NativeTabs` from `expo-router/native-tabs` for native tab bar
 - SF Symbols on iOS, Ionicons on Android via `ionicon` prop
 - Note viewer is outside tabs (Stack screen)
 

@@ -6,11 +6,13 @@ export interface NoteMetadata {
   sha?: string;
   hasPendingChanges?: boolean;
   isPinned?: boolean;
+  lastOpenedAt?: number;
   // Future properties can be added here:
   // isPrivate?: boolean;
   // summary?: string;
 }
 
+// Keys are note paths relative to the repository root, e.g. "projects/plan.md".
 type AllNotesMetadata = Record<string, NoteMetadata>;
 
 function getAllMetadata(): AllNotesMetadata {
@@ -88,5 +90,13 @@ export const noteMetadata = {
     return Object.entries(all)
       .filter(([_, meta]) => meta.isPinned)
       .map(([filename]) => filename);
+  },
+
+  markOpened(filename: string): void {
+    this.update(filename, { lastOpenedAt: Date.now() });
+  },
+
+  getLastOpenedAt(filename: string): number {
+    return this.get(filename).lastOpenedAt ?? 0;
   },
 };
