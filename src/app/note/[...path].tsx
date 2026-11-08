@@ -1,4 +1,5 @@
 import { AppColors, useAppColors } from "@/constants/colors";
+import { useMarkdownStyle } from "@/constants/markdownStyle";
 import { Toast } from "@/components/Toast";
 import { getFileName, readLocalFile, writeLocalFile } from "@/utils/fileSystem";
 import { noteMetadata } from "@/utils/noteMetadata";
@@ -11,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,6 +21,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { EnrichedMarkdownText } from "react-native-enriched-markdown";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 type SyncOutcome = "uploaded" | "downloaded" | "conflict" | "not-on-github";
@@ -38,6 +41,7 @@ function loadNote(notePath: string): { content: string; error: string | null } {
 export default function NoteViewerScreen() {
   const colors = useAppColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const markdownStyle = useMarkdownStyle();
   const { path } = useLocalSearchParams<{ path: string[] }>();
   const notePath = Array.isArray(path) ? path.join("/") : (path ?? "");
   // Local files are read synchronously, so the note loads on the first render.
@@ -296,9 +300,18 @@ export default function NoteViewerScreen() {
                 </Text>
               </Pressable>
             ) : (
-              <Text style={styles.text} selectable>
-                {content}
-              </Text>
+              <EnrichedMarkdownText
+                flavor="github"
+                markdown={content}
+                markdownStyle={markdownStyle}
+                selectable
+                enableTaskListItemToggle={false}
+                onLinkPress={({ url }) => {
+                  Linking.openURL(url).catch(() =>
+                    showToast("error", `Cannot open link: ${url}`),
+                  );
+                }}
+              />
             )}
           </ScrollView>
         )}

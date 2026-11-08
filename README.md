@@ -21,7 +21,10 @@ npx eas-cli@latest workflow:run .eas/workflows/dev-builds.yaml
 - Sync markdown files with GitHub, including folders
 - Pull changes and deletions made outside the device
 - Sync never overwrites notes with local changes
-- View and edit notes, including non-ASCII text and emoji
+- Rendered markdown view (GitHub flavor: tables, task lists, code blocks) with enriched-markdown
+- Edit notes as plain markdown, including non-ASCII text and emoji
+- Light and dark mode
+- Works offline; changes upload when you are online
 - Create notes in folders (`folder/name`)
 - Track unsynced changes per note, and upload all from the dashboard
 - Choose a version when a note changed on GitHub (conflict)
@@ -32,4 +35,4 @@ npx eas-cli@latest workflow:run .eas/workflows/dev-builds.yaml
 
 - Live user testing of basic connection and editing features
 - Ensure file deletion is working
-- Switch to [enriched-markdown](https://github.com/software-mansion/enriched-markdown) for editing
+- Switch the editor to [enriched-markdown](https://github.com/software-mansion/enriched-markdown) (viewer done)

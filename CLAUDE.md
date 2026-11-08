@@ -6,7 +6,8 @@ A mobile notes app that syncs markdown files with a GitHub repository.
 
 - **Framework**: Expo SDK 58 with Expo Router
 - **Language**: TypeScript
-- **UI**: React Native with Ionicons
+- **UI**: React Native with Ionicons; notes render with `react-native-enriched-markdown`
+- **Colors**: use tokens from `src/constants/colors.ts` (`useAppColors`), not hex literals; light and dark mode
 - **State Management**: React Query for async operations, React useState for local state
 - **Storage**: expo-sqlite/kv-store for local metadata (synchronous API)
 - **File System**: expo-file-system for local note storage
