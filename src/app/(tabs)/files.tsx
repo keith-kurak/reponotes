@@ -1,7 +1,14 @@
-import { listLocalFiles, writeLocalFile } from "@/utils/fileSystem";
-import { fetchFileContentWithSha, listMarkdownFiles } from "@/utils/github";
-import { fileSha, pendingChanges } from "@/utils/pendingChanges";
-import { storage } from "@/utils/storage";
+import {
+  getFileName,
+  getFolderPath,
+  listLocalFiles,
+  localFileExists,
+  normalizeNotePath,
+  writeLocalFile,
+} from "@/utils/fileSystem";
+import { pendingChanges } from "@/utils/pendingChanges";
+import { noteHref } from "@/utils/routes";
+import { syncAllFromGitHub, SyncResult } from "@/utils/sync";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { Link, router, useFocusEffect } from "expo-router";
@@ -19,17 +26,32 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+function describeSyncResult(result: SyncResult): string {
+  const parts = [
+    result.downloaded === 1
+      ? "1 note downloaded"
+      : `${result.downloaded} notes downloaded`,
+  ];
+  if (result.deleted.length > 0) {
+    parts.push(`${result.deleted.length} removed (deleted on GitHub)`);
+  }
+  let message = `Synced: ${parts.join(", ")}.`;
+  if (result.skippedPending.length > 0) {
+    message += ` Not changed because they have local edits: ${result.skippedPending.join(", ")}.`;
+  }
+  return message;
+}
+
 export default function FileListScreen() {
   const [localFiles, setLocalFiles] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<string[]>([]);
   const [showNewFileModal, setShowNewFileModal] = useState(false);
   const [newFileName, setNewFileName] = useState("");
+  const [newFileError, setNewFileError] = useState<string | null>(null);
 
   const loadLocalFiles = () => {
-    const files = listLocalFiles();
-    setLocalFiles(files);
-    const pending = pendingChanges.getAll();
-    setPendingFiles(pending);
+    setLocalFiles(listLocalFiles());
+    setPendingFiles(pendingChanges.getAll());
   };
 
   useFocusEffect(
@@ -38,65 +60,56 @@ export default function FileListScreen() {
     }, []),
   );
 
-  const handleCreateFile = () => {
-    if (!newFileName.trim()) return;
-
-    // Add .md extension if no extension is provided
-    let filename = newFileName.trim();
-    if (!filename.includes(".")) {
-      filename = `${filename}.md`;
-    }
-
-    // Create empty file and navigate to it
-    writeLocalFile(filename, "");
+  const closeNewFileModal = () => {
     setShowNewFileModal(false);
     setNewFileName("");
-    router.push(`/note/${encodeURIComponent(filename)}`);
+    setNewFileError(null);
+  };
+
+  const handleCreateFile = () => {
+    let path = normalizeNotePath(newFileName);
+    if (!path) {
+      setNewFileError("Enter a file name.");
+      return;
+    }
+
+    // Add .md extension if no extension is provided
+    if (!getFileName(path).includes(".")) {
+      path = `${path}.md`;
+    }
+    if (!path.endsWith(".md") && !path.endsWith(".txt")) {
+      setNewFileError("Use a .md or .txt file name.");
+      return;
+    }
+    if (localFileExists(path)) {
+      setNewFileError("A note with this name already exists.");
+      return;
+    }
+
+    writeLocalFile(path, "");
+    closeNewFileModal();
+    router.push(noteHref(path));
   };
 
   const syncMutation = useMutation({
-    mutationFn: async () => {
-      const token = storage.getGitHubPAT();
-      const repoName = storage.getRepoName();
-      const owner = storage.getGitHubOwner();
-
-      if (!token) {
-        throw new Error(
-          "GitHub PAT not configured. Please configure in Settings.",
-        );
-      }
-      if (!owner) {
-        throw new Error(
-          "GitHub owner not configured. Please configure in Settings.",
-        );
-      }
-
-      const files = await listMarkdownFiles(token, repoName, owner);
-
-      await Promise.all(
-        files.map(async (file) => {
-          const result = await fetchFileContentWithSha(
-            token,
-            repoName,
-            owner,
-            file.path,
-          );
-          writeLocalFile(file.name, result.content);
-          fileSha.set(file.name, result.sha);
-        }),
-      );
-
-      loadLocalFiles();
-    },
+    mutationFn: syncAllFromGitHub,
+    onSettled: loadLocalFiles,
   });
 
   const renderItem = ({ item }: { item: string }) => {
     const hasPending = pendingFiles.includes(item);
+    const folder = getFolderPath(item);
     return (
-      <Link href={`/note/${encodeURIComponent(item)}`} asChild>
-        <TouchableOpacity style={styles.fileItem}>
+      <Link href={noteHref(item)} asChild>
+        <TouchableOpacity
+          style={styles.fileItem}
+          accessibilityLabel={`${item}${hasPending ? ", has changes not on GitHub" : ""}`}
+        >
           <Ionicons name="document-text-outline" size={24} color="#666" />
-          <Text style={styles.fileName}>{item}</Text>
+          <View style={styles.fileText}>
+            <Text style={styles.fileName}>{getFileName(item)}</Text>
+            {folder ? <Text style={styles.folderName}>{folder}</Text> : null}
+          </View>
           {hasPending && <View style={styles.pendingDot} />}
           <Ionicons name="chevron-forward" size={20} color="#ccc" />
         </TouchableOpacity>
@@ -108,10 +121,21 @@ export default function FileListScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar style="dark" />
       <View style={styles.toolbar}>
+        <Text style={styles.toolbarTitle}>Files</Text>
+        <TouchableOpacity
+          style={styles.toolbarButton}
+          onPress={() => setShowNewFileModal(true)}
+          accessibilityRole="button"
+          accessibilityLabel="New note"
+        >
+          <Ionicons name="add" size={28} color="#007AFF" />
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.toolbarButton}
           onPress={() => syncMutation.mutate()}
           disabled={syncMutation.isPending}
+          accessibilityRole="button"
+          accessibilityLabel="Download notes from GitHub"
         >
           {syncMutation.isPending ? (
             <ActivityIndicator size="small" color="#007AFF" />
@@ -133,7 +157,9 @@ export default function FileListScreen() {
 
       {syncMutation.isSuccess && (
         <View style={styles.successBox}>
-          <Text style={styles.successText}>Files synced successfully!</Text>
+          <Text style={styles.successText}>
+            {describeSyncResult(syncMutation.data)}
+          </Text>
         </View>
       )}
 
@@ -142,7 +168,7 @@ export default function FileListScreen() {
           <Ionicons name="folder-open-outline" size={64} color="#ccc" />
           <Text style={styles.emptyText}>No notes yet</Text>
           <Text style={styles.emptyHint}>
-            Tap the + button to create a new note
+            Tap the sync button to download notes, or + to create a note
           </Text>
         </View>
       ) : (
@@ -151,44 +177,46 @@ export default function FileListScreen() {
           renderItem={renderItem}
           keyExtractor={(item) => item}
           style={styles.list}
+          refreshing={false}
+          onRefresh={() => syncMutation.mutate()}
         />
       )}
-
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => setShowNewFileModal(true)}
-      >
-        <Ionicons name="add" size={28} color="#fff" />
-      </TouchableOpacity>
 
       <Modal
         visible={showNewFileModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowNewFileModal(false)}
+        onRequestClose={closeNewFileModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>New File</Text>
+            <Text style={styles.modalTitle}>New Note</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="filename"
+              placeholder="name or folder/name"
               value={newFileName}
-              onChangeText={setNewFileName}
+              onChangeText={(text) => {
+                setNewFileName(text);
+                setNewFileError(null);
+              }}
+              onSubmitEditing={handleCreateFile}
               autoFocus
               autoCapitalize="none"
               autoCorrect={false}
+              accessibilityLabel="File name"
             />
-            <Text style={styles.modalHint}>
-              .md extension added automatically if none provided
-            </Text>
+            {newFileError ? (
+              <Text style={styles.modalError}>{newFileError}</Text>
+            ) : (
+              <Text style={styles.modalHint}>
+                .md is added if there is no extension. Use / for folders.
+              </Text>
+            )}
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={styles.modalButtonCancel}
-                onPress={() => {
-                  setShowNewFileModal(false);
-                  setNewFileName("");
-                }}
+                onPress={closeNewFileModal}
+                accessibilityRole="button"
               >
                 <Text style={styles.modalButtonCancelText}>Cancel</Text>
               </TouchableOpacity>
@@ -199,6 +227,7 @@ export default function FileListScreen() {
                 ]}
                 onPress={handleCreateFile}
                 disabled={!newFileName.trim()}
+                accessibilityRole="button"
               >
                 <Text style={styles.modalButtonCreateText}>Create</Text>
               </TouchableOpacity>
@@ -217,12 +246,18 @@ const styles = StyleSheet.create({
   },
   toolbar: {
     flexDirection: "row",
-    justifyContent: "flex-end",
     alignItems: "center",
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
     gap: 12,
+  },
+  toolbarTitle: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#333",
+    marginLeft: 4,
   },
   toolbarButton: {
     padding: 8,
@@ -238,10 +273,17 @@ const styles = StyleSheet.create({
     borderBottomColor: "#eee",
     gap: 12,
   },
-  fileName: {
+  fileText: {
     flex: 1,
+  },
+  fileName: {
     fontSize: 16,
     color: "#333",
+  },
+  folderName: {
+    fontSize: 13,
+    color: "#888",
+    marginTop: 2,
   },
   pendingDot: {
     width: 10,
@@ -294,22 +336,6 @@ const styles = StyleSheet.create({
     color: "#2e7d32",
     fontSize: 14,
   },
-  fab: {
-    position: "absolute",
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#007AFF",
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -340,6 +366,11 @@ const styles = StyleSheet.create({
   modalHint: {
     fontSize: 12,
     color: "#999",
+    marginBottom: 16,
+  },
+  modalError: {
+    fontSize: 12,
+    color: "#c62828",
     marginBottom: 16,
   },
   modalButtons: {

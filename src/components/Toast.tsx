@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { Animated, StyleSheet, Text, TouchableOpacity } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface ToastProps {
   message: string;
@@ -18,6 +19,7 @@ export function Toast({
   duration = 5000,
 }: ToastProps) {
   const [opacity] = useState(new Animated.Value(0));
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (visible) {
@@ -39,7 +41,7 @@ export function Toast({
     } else {
       opacity.setValue(0);
     }
-  }, [visible, duration, onDismiss]);
+  }, [visible, message, duration, onDismiss, opacity]);
 
   if (!visible) return null;
 
@@ -50,8 +52,10 @@ export function Toast({
       style={[
         styles.container,
         isSuccess ? styles.successBox : styles.errorBox,
-        { opacity },
+        { opacity, bottom: insets.bottom + 16 },
       ]}
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
     >
       <Ionicons
         name={isSuccess ? "checkmark-circle" : "alert-circle"}
@@ -61,7 +65,12 @@ export function Toast({
       <Text style={[styles.text, isSuccess ? styles.successText : styles.errorText]}>
         {message}
       </Text>
-      <TouchableOpacity onPress={onDismiss} hitSlop={8}>
+      <TouchableOpacity
+        onPress={onDismiss}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss message"
+      >
         <Ionicons name="close" size={18} color={isSuccess ? "#2e7d32" : "#c62828"} />
       </TouchableOpacity>
     </Animated.View>
@@ -72,9 +81,10 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
+    position: "absolute",
+    left: 16,
+    right: 16,
     padding: 12,
-    marginHorizontal: 16,
-    marginTop: 8,
     borderRadius: 8,
     borderWidth: 1,
     gap: 8,

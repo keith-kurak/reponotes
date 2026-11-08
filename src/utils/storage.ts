@@ -1,5 +1,7 @@
 import Storage from 'expo-sqlite/kv-store';
 
+import type { GitHubConfig } from './github';
+
 const STORAGE_KEYS = {
   GITHUB_PAT: '@reponotes/github_pat',
   REPO_NAME: '@reponotes/repo_name',
@@ -30,6 +32,19 @@ export const storage = {
 
   setGitHubOwner(owner: string): void {
     Storage.setItemSync(STORAGE_KEYS.GITHUB_OWNER, owner);
+  },
+
+  /** Returns the saved GitHub settings, or throws if they are incomplete. */
+  getGitHubConfig(): GitHubConfig {
+    const token = this.getGitHubPAT();
+    const owner = this.getGitHubOwner();
+    if (!token) {
+      throw new Error('GitHub token not configured. Add it in Settings.');
+    }
+    if (!owner) {
+      throw new Error('GitHub owner not configured. Add it in Settings.');
+    }
+    return { token, owner, repoName: this.getRepoName() };
   },
 
   clearAll(): void {

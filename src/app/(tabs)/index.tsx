@@ -1,11 +1,15 @@
 import { listLocalFiles } from "@/utils/fileSystem";
 import { noteMetadata } from "@/utils/noteMetadata";
 import { pendingChanges } from "@/utils/pendingChanges";
+import { noteHref } from "@/utils/routes";
+import { uploadAllPending, UploadAllResult } from "@/utils/sync";
 import { Ionicons } from "@expo/vector-icons";
+import { useMutation } from "@tanstack/react-query";
 import { Link, useFocusEffect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,6 +17,19 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+function describeUploadResult(result: UploadAllResult): string {
+  const lines = [`Uploaded ${result.uploaded.length} file(s).`];
+  if (result.conflicts.length > 0) {
+    lines.push(
+      `Changed on GitHub (open each note to choose a version): ${result.conflicts.join(", ")}.`,
+    );
+  }
+  for (const failure of result.failed) {
+    lines.push(`${failure.path}: ${failure.message}`);
+  }
+  return lines.join("\n");
+}
 
 export default function DashboardScreen() {
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
@@ -25,12 +42,21 @@ export default function DashboardScreen() {
       .getAllPinnedFiles()
       .filter((f) => files.includes(f));
     setPinnedFiles(pinned);
-    // Show the 5 most recent files (excluding pinned ones)
-    const nonPinnedFiles = files.filter((f) => !pinned.includes(f));
+    // Show the 5 most recently opened files (excluding pinned ones)
+    const nonPinnedFiles = files
+      .filter((f) => !pinned.includes(f))
+      .sort(
+        (a, b) =>
+          noteMetadata.getLastOpenedAt(b) - noteMetadata.getLastOpenedAt(a),
+      );
     setRecentFiles(nonPinnedFiles.slice(0, 5));
-    const pending = pendingChanges.getAll();
-    setPendingFiles(pending);
+    setPendingFiles(pendingChanges.getAll().filter((f) => files.includes(f)));
   };
+
+  const uploadMutation = useMutation({
+    mutationFn: uploadAllPending,
+    onSettled: () => loadData(),
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -50,10 +76,13 @@ export default function DashboardScreen() {
               return (
                 <Link
                   key={file}
-                  href={`/note/${encodeURIComponent(file)}`}
+                  href={noteHref(file)}
                   asChild
                 >
-                  <TouchableOpacity style={styles.pinnedItem}>
+                  <TouchableOpacity
+                    style={styles.pinnedItem}
+                    accessibilityLabel={`Pinned: ${file}`}
+                  >
                     <Ionicons name="pin" size={18} color="#007AFF" />
                     <Text style={styles.fileName}>{file}</Text>
                     {hasPending && <View style={styles.pendingDot} />}
@@ -83,10 +112,13 @@ export default function DashboardScreen() {
               return (
                 <Link
                   key={file}
-                  href={`/note/${encodeURIComponent(file)}`}
+                  href={noteHref(file)}
                   asChild
                 >
-                  <TouchableOpacity style={styles.fileItem}>
+                  <TouchableOpacity
+                    style={styles.fileItem}
+                    accessibilityLabel={file}
+                  >
                     <Ionicons
                       name="document-text-outline"
                       size={20}
@@ -102,16 +134,43 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        {pendingFiles.length > 0 && (
+        {(pendingFiles.length > 0 || uploadMutation.data || uploadMutation.error) && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Pending Changes</Text>
-            <View style={styles.pendingCard}>
-              <Ionicons name="cloud-upload-outline" size={24} color="#FFC107" />
-              <Text style={styles.pendingCount}>
-                {pendingFiles.length} file{pendingFiles.length !== 1 ? "s" : ""}{" "}
-                with unsaved changes
+            {pendingFiles.length > 0 && (
+              <TouchableOpacity
+                style={styles.pendingCard}
+                onPress={() => uploadMutation.mutate()}
+                disabled={uploadMutation.isPending}
+                accessibilityRole="button"
+                accessibilityLabel={`Upload all: ${pendingFiles.length} file${pendingFiles.length !== 1 ? "s" : ""} with changes not on GitHub`}
+              >
+                {uploadMutation.isPending ? (
+                  <ActivityIndicator color="#F57C00" />
+                ) : (
+                  <Ionicons
+                    name="cloud-upload-outline"
+                    size={24}
+                    color="#FFC107"
+                  />
+                )}
+                <Text style={styles.pendingCount}>
+                  {pendingFiles.length} file
+                  {pendingFiles.length !== 1 ? "s" : ""} with unsaved changes
+                </Text>
+                <Text style={styles.pendingAction}>Upload all</Text>
+              </TouchableOpacity>
+            )}
+            {uploadMutation.data && (
+              <Text style={styles.uploadResult}>
+                {describeUploadResult(uploadMutation.data)}
               </Text>
-            </View>
+            )}
+            {uploadMutation.error && (
+              <Text style={styles.uploadError}>
+                {uploadMutation.error.message}
+              </Text>
+            )}
           </View>
         )}
 
@@ -210,8 +269,24 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   pendingCount: {
+    flex: 1,
     fontSize: 15,
     color: "#F57C00",
+  },
+  pendingAction: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#007AFF",
+  },
+  uploadResult: {
+    fontSize: 14,
+    color: "#555",
+    marginTop: 8,
+  },
+  uploadError: {
+    fontSize: 14,
+    color: "#c62828",
+    marginTop: 8,
   },
   actionsRow: {
     flexDirection: "row",

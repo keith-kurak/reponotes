@@ -18,16 +18,18 @@ npx eas-cli@latest workflow:run .eas/workflows/dev-builds.yaml
 ## Features
 
 - Connect to a GitHub repo with a PAT
-- Sync markdown files with GitHub
-- View and edit notes
-- Track unsynced changes per note
+- Sync markdown files with GitHub, including folders
+- Pull changes and deletions made outside the device
+- Sync never overwrites notes with local changes
+- View and edit notes, including non-ASCII text and emoji
+- Create notes in folders (`folder/name`)
+- Track unsynced changes per note, and upload all from the dashboard
+- Choose a version when a note changed on GitHub (conflict)
 - Pin notes to the dashboard
-- Recent files on the dashboard
+- Recently opened files on the dashboard
 
 ## TODO
 
 - Live user testing of basic connection and editing features
 - Ensure file deletion is working
-- Ensure folders can be created
-- Pull changes made outside the device from the repo
 - Switch to [enriched-markdown](https://github.com/software-mansion/enriched-markdown) for editing
