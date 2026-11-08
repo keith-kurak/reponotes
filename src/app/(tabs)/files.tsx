@@ -1,3 +1,4 @@
+import { AppColors, useAppColors } from "@/constants/colors";
 import {
   getFileName,
   getFolderPath,
@@ -12,8 +13,7 @@ import { syncAllFromGitHub, SyncResult } from "@/utils/sync";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { Link, router, useFocusEffect } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -43,6 +43,8 @@ function describeSyncResult(result: SyncResult): string {
 }
 
 export default function FileListScreen() {
+  const colors = useAppColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [localFiles, setLocalFiles] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<string[]>([]);
   const [showNewFileModal, setShowNewFileModal] = useState(false);
@@ -105,13 +107,13 @@ export default function FileListScreen() {
           style={styles.fileItem}
           accessibilityLabel={`${item}${hasPending ? ", has changes not on GitHub" : ""}`}
         >
-          <Ionicons name="document-text-outline" size={24} color="#666" />
+          <Ionicons name="document-text-outline" size={24} color={colors.icon} />
           <View style={styles.fileText}>
             <Text style={styles.fileName}>{getFileName(item)}</Text>
             {folder ? <Text style={styles.folderName}>{folder}</Text> : null}
           </View>
           {hasPending && <View style={styles.pendingDot} />}
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          <Ionicons name="chevron-forward" size={20} color={colors.iconMuted} />
         </TouchableOpacity>
       </Link>
     );
@@ -119,7 +121,6 @@ export default function FileListScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <StatusBar style="dark" />
       <View style={styles.toolbar}>
         <Text style={styles.toolbarTitle}>Files</Text>
         <TouchableOpacity
@@ -128,7 +129,7 @@ export default function FileListScreen() {
           accessibilityRole="button"
           accessibilityLabel="New note"
         >
-          <Ionicons name="add" size={28} color="#007AFF" />
+          <Ionicons name="add" size={28} color={colors.tint} />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.toolbarButton}
@@ -138,9 +139,9 @@ export default function FileListScreen() {
           accessibilityLabel="Download notes from GitHub"
         >
           {syncMutation.isPending ? (
-            <ActivityIndicator size="small" color="#007AFF" />
+            <ActivityIndicator size="small" color={colors.tint} />
           ) : (
-            <Ionicons name="sync-outline" size={24} color="#007AFF" />
+            <Ionicons name="sync-outline" size={24} color={colors.tint} />
           )}
         </TouchableOpacity>
       </View>
@@ -165,7 +166,7 @@ export default function FileListScreen() {
 
       {localFiles.length === 0 ? (
         <View style={styles.emptyState}>
-          <Ionicons name="folder-open-outline" size={64} color="#ccc" />
+          <Ionicons name="folder-open-outline" size={64} color={colors.iconMuted} />
           <Text style={styles.emptyText}>No notes yet</Text>
           <Text style={styles.emptyHint}>
             Tap the sync button to download notes, or + to create a note
@@ -194,6 +195,7 @@ export default function FileListScreen() {
             <TextInput
               style={styles.modalInput}
               placeholder="name or folder/name"
+              placeholderTextColor={colors.textTertiary}
               value={newFileName}
               onChangeText={(text) => {
                 setNewFileName(text);
@@ -239,165 +241,168 @@ export default function FileListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  toolbar: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-    gap: 12,
-  },
-  toolbarTitle: {
-    flex: 1,
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#333",
-    marginLeft: 4,
-  },
-  toolbarButton: {
-    padding: 8,
-  },
-  list: {
-    flex: 1,
-  },
-  fileItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-    gap: 12,
-  },
-  fileText: {
-    flex: 1,
-  },
-  fileName: {
-    fontSize: 16,
-    color: "#333",
-  },
-  folderName: {
-    fontSize: 13,
-    color: "#888",
-    marginTop: 2,
-  },
-  pendingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#FFC107",
-    marginRight: 8,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 32,
-  },
-  emptyText: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#999",
-    marginTop: 16,
-  },
-  emptyHint: {
-    fontSize: 14,
-    color: "#ccc",
-    marginTop: 8,
-    textAlign: "center",
-  },
-  errorBox: {
-    backgroundColor: "#ffebee",
-    padding: 12,
-    marginHorizontal: 16,
-    marginTop: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#f44336",
-  },
-  errorText: {
-    color: "#c62828",
-    fontSize: 14,
-  },
-  successBox: {
-    backgroundColor: "#e8f5e9",
-    padding: 12,
-    marginHorizontal: 16,
-    marginTop: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#4caf50",
-  },
-  successText: {
-    color: "#2e7d32",
-    fontSize: 14,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 24,
-    width: "80%",
-    maxWidth: 320,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 16,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  modalHint: {
-    fontSize: 12,
-    color: "#999",
-    marginBottom: 16,
-  },
-  modalError: {
-    fontSize: 12,
-    color: "#c62828",
-    marginBottom: 16,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-  },
-  modalButtonCancel: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-  },
-  modalButtonCancelText: {
-    color: "#666",
-    fontSize: 16,
-  },
-  modalButtonCreate: {
-    backgroundColor: "#007AFF",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-  modalButtonCreateText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  modalButtonDisabled: {
-    backgroundColor: "#ccc",
-  },
-});
+function createStyles(c: AppColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    toolbar: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+      gap: 12,
+    },
+    toolbarTitle: {
+      flex: 1,
+      fontSize: 22,
+      fontWeight: "700",
+      color: c.text,
+      marginLeft: 4,
+    },
+    toolbarButton: {
+      padding: 8,
+    },
+    list: {
+      flex: 1,
+    },
+    fileItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+      gap: 12,
+    },
+    fileText: {
+      flex: 1,
+    },
+    fileName: {
+      fontSize: 16,
+      color: c.text,
+    },
+    folderName: {
+      fontSize: 13,
+      color: c.textTertiary,
+      marginTop: 2,
+    },
+    pendingDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: c.pending,
+      marginRight: 8,
+    },
+    emptyState: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 32,
+    },
+    emptyText: {
+      fontSize: 20,
+      fontWeight: "600",
+      color: c.textTertiary,
+      marginTop: 16,
+    },
+    emptyHint: {
+      fontSize: 14,
+      color: c.textMuted,
+      marginTop: 8,
+      textAlign: "center",
+    },
+    errorBox: {
+      backgroundColor: c.errorBackground,
+      padding: 12,
+      marginHorizontal: 16,
+      marginTop: 8,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: c.errorBorder,
+    },
+    errorText: {
+      color: c.errorText,
+      fontSize: 14,
+    },
+    successBox: {
+      backgroundColor: c.successBackground,
+      padding: 12,
+      marginHorizontal: 16,
+      marginTop: 8,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: c.successBorder,
+    },
+    successText: {
+      color: c.successText,
+      fontSize: 14,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: c.overlay,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContent: {
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      padding: 24,
+      width: "80%",
+      maxWidth: 320,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: c.text,
+      marginBottom: 16,
+    },
+    modalInput: {
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.inputBorder,
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16,
+      marginBottom: 8,
+    },
+    modalHint: {
+      fontSize: 12,
+      color: c.textTertiary,
+      marginBottom: 16,
+    },
+    modalError: {
+      fontSize: 12,
+      color: c.errorText,
+      marginBottom: 16,
+    },
+    modalButtons: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      gap: 12,
+    },
+    modalButtonCancel: {
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+    },
+    modalButtonCancelText: {
+      color: c.textSecondary,
+      fontSize: 16,
+    },
+    modalButtonCreate: {
+      backgroundColor: c.tint,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+    },
+    modalButtonCreateText: {
+      color: c.onTint,
+      fontSize: 16,
+      fontWeight: "500",
+    },
+    modalButtonDisabled: {
+      backgroundColor: c.disabled,
+    },
+  });
+}

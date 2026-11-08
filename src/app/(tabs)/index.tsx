@@ -1,3 +1,4 @@
+import { AppColors, useAppColors } from "@/constants/colors";
 import { listLocalFiles } from "@/utils/fileSystem";
 import { noteMetadata } from "@/utils/noteMetadata";
 import { pendingChanges } from "@/utils/pendingChanges";
@@ -6,8 +7,7 @@ import { uploadAllPending, UploadAllResult } from "@/utils/sync";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { Link, useFocusEffect } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -19,7 +19,15 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 function describeUploadResult(result: UploadAllResult): string {
-  const lines = [`Uploaded ${result.uploaded.length} file(s).`];
+  const lines: string[] = [];
+  if (result.offline) {
+    lines.push(
+      "Cannot reach GitHub. Your changes are saved on this device. Tap Upload all again when you are online.",
+    );
+  }
+  if (result.uploaded.length > 0 || !result.offline) {
+    lines.push(`Uploaded ${result.uploaded.length} file(s).`);
+  }
   if (result.conflicts.length > 0) {
     lines.push(
       `Changed on GitHub (open each note to choose a version): ${result.conflicts.join(", ")}.`,
@@ -32,6 +40,8 @@ function describeUploadResult(result: UploadAllResult): string {
 }
 
 export default function DashboardScreen() {
+  const colors = useAppColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
   const [pinnedFiles, setPinnedFiles] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<string[]>([]);
@@ -66,7 +76,6 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <StatusBar style="dark" />
       <ScrollView style={styles.scrollView}>
         {pinnedFiles.length > 0 && (
           <View style={styles.section}>
@@ -83,10 +92,10 @@ export default function DashboardScreen() {
                     style={styles.pinnedItem}
                     accessibilityLabel={`Pinned: ${file}`}
                   >
-                    <Ionicons name="pin" size={18} color="#007AFF" />
+                    <Ionicons name="pin" size={18} color={colors.tint} />
                     <Text style={styles.fileName}>{file}</Text>
                     {hasPending && <View style={styles.pendingDot} />}
-                    <Ionicons name="chevron-forward" size={16} color="#ccc" />
+                    <Ionicons name="chevron-forward" size={16} color={colors.iconMuted} />
                   </TouchableOpacity>
                 </Link>
               );
@@ -98,7 +107,7 @@ export default function DashboardScreen() {
           <Text style={styles.sectionTitle}>Recent Files</Text>
           {recentFiles.length === 0 && pinnedFiles.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="document-text-outline" size={48} color="#ccc" />
+              <Ionicons name="document-text-outline" size={48} color={colors.iconMuted} />
               <Text style={styles.emptyText}>No files yet</Text>
               <Text style={styles.emptyHint}>
                 Go to Files tab to sync or create notes
@@ -122,11 +131,11 @@ export default function DashboardScreen() {
                     <Ionicons
                       name="document-text-outline"
                       size={20}
-                      color="#666"
+                      color={colors.icon}
                     />
                     <Text style={styles.fileName}>{file}</Text>
                     {hasPending && <View style={styles.pendingDot} />}
-                    <Ionicons name="chevron-forward" size={16} color="#ccc" />
+                    <Ionicons name="chevron-forward" size={16} color={colors.iconMuted} />
                   </TouchableOpacity>
                 </Link>
               );
@@ -146,12 +155,12 @@ export default function DashboardScreen() {
                 accessibilityLabel={`Upload all: ${pendingFiles.length} file${pendingFiles.length !== 1 ? "s" : ""} with changes not on GitHub`}
               >
                 {uploadMutation.isPending ? (
-                  <ActivityIndicator color="#F57C00" />
+                  <ActivityIndicator color={colors.warningText} />
                 ) : (
                   <Ionicons
                     name="cloud-upload-outline"
                     size={24}
-                    color="#FFC107"
+                    color={colors.pending}
                   />
                 )}
                 <Text style={styles.pendingCount}>
@@ -179,13 +188,13 @@ export default function DashboardScreen() {
           <View style={styles.actionsRow}>
             <Link href="/(tabs)/files" asChild>
               <TouchableOpacity style={styles.actionButton}>
-                <Ionicons name="folder-outline" size={24} color="#007AFF" />
+                <Ionicons name="folder-outline" size={24} color={colors.tint} />
                 <Text style={styles.actionText}>Browse Files</Text>
               </TouchableOpacity>
             </Link>
             <Link href="/(tabs)/settings" asChild>
               <TouchableOpacity style={styles.actionButton}>
-                <Ionicons name="settings-outline" size={24} color="#007AFF" />
+                <Ionicons name="settings-outline" size={24} color={colors.tint} />
                 <Text style={styles.actionText}>Settings</Text>
               </TouchableOpacity>
             </Link>
@@ -196,113 +205,115 @@ export default function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  section: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 12,
-  },
-  emptyState: {
-    alignItems: "center",
-    padding: 24,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#999",
-    marginTop: 12,
-  },
-  emptyHint: {
-    fontSize: 14,
-    color: "#ccc",
-    marginTop: 4,
-    textAlign: "center",
-  },
-  fileItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    backgroundColor: "#f9f9f9",
-    borderRadius: 8,
-    marginBottom: 8,
-    gap: 10,
-  },
-  pinnedItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    backgroundColor: "#e3f2fd",
-    borderRadius: 8,
-    marginBottom: 8,
-    gap: 10,
-  },
-  fileName: {
-    flex: 1,
-    fontSize: 15,
-    color: "#333",
-  },
-  pendingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#FFC107",
-  },
-  pendingCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    backgroundColor: "#FFF8E1",
-    borderRadius: 8,
-    gap: 12,
-  },
-  pendingCount: {
-    flex: 1,
-    fontSize: 15,
-    color: "#F57C00",
-  },
-  pendingAction: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#007AFF",
-  },
-  uploadResult: {
-    fontSize: 14,
-    color: "#555",
-    marginTop: 8,
-  },
-  uploadError: {
-    fontSize: 14,
-    color: "#c62828",
-    marginTop: 8,
-  },
-  actionsRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  actionButton: {
-    flex: 1,
-    alignItems: "center",
-    padding: 16,
-    backgroundColor: "#f0f8ff",
-    borderRadius: 8,
-    gap: 8,
-  },
-  actionText: {
-    fontSize: 14,
-    color: "#007AFF",
-    fontWeight: "500",
-  },
-});
+function createStyles(c: AppColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    section: {
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: c.text,
+      marginBottom: 12,
+    },
+    emptyState: {
+      alignItems: "center",
+      padding: 24,
+    },
+    emptyText: {
+      fontSize: 16,
+      fontWeight: "500",
+      color: c.textTertiary,
+      marginTop: 12,
+    },
+    emptyHint: {
+      fontSize: 14,
+      color: c.textMuted,
+      marginTop: 4,
+      textAlign: "center",
+    },
+    fileItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 12,
+      backgroundColor: c.surface,
+      borderRadius: 8,
+      marginBottom: 8,
+      gap: 10,
+    },
+    pinnedItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 12,
+      backgroundColor: c.surfacePinned,
+      borderRadius: 8,
+      marginBottom: 8,
+      gap: 10,
+    },
+    fileName: {
+      flex: 1,
+      fontSize: 15,
+      color: c.text,
+    },
+    pendingDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: c.pending,
+    },
+    pendingCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 16,
+      backgroundColor: c.warningBackground,
+      borderRadius: 8,
+      gap: 12,
+    },
+    pendingCount: {
+      flex: 1,
+      fontSize: 15,
+      color: c.warningText,
+    },
+    pendingAction: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: c.tint,
+    },
+    uploadResult: {
+      fontSize: 14,
+      color: c.textSecondary,
+      marginTop: 8,
+    },
+    uploadError: {
+      fontSize: 14,
+      color: c.errorText,
+      marginTop: 8,
+    },
+    actionsRow: {
+      flexDirection: "row",
+      gap: 12,
+    },
+    actionButton: {
+      flex: 1,
+      alignItems: "center",
+      padding: 16,
+      backgroundColor: c.surfaceAccent,
+      borderRadius: 8,
+      gap: 8,
+    },
+    actionText: {
+      fontSize: 14,
+      color: c.tint,
+      fontWeight: "500",
+    },
+  });
+}

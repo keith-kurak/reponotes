@@ -1,3 +1,4 @@
+import { AppColors, useAppColors } from "@/constants/colors";
 import { Toast } from "@/components/Toast";
 import { getFileName, readLocalFile, writeLocalFile } from "@/utils/fileSystem";
 import { noteMetadata } from "@/utils/noteMetadata";
@@ -6,7 +7,7 @@ import { downloadNote, forceUploadNote, uploadNote } from "@/utils/sync";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -35,6 +36,8 @@ function loadNote(notePath: string): { content: string; error: string | null } {
 }
 
 export default function NoteViewerScreen() {
+  const colors = useAppColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { path } = useLocalSearchParams<{ path: string[] }>();
   const notePath = Array.isArray(path) ? path.join("/") : (path ?? "");
   // Local files are read synchronously, so the note loads on the first render.
@@ -201,7 +204,7 @@ export default function NoteViewerScreen() {
                   <Ionicons
                     name={isPinned ? "pin" : "pin-outline"}
                     size={22}
-                    color={isPinned ? "#007AFF" : "#999"}
+                    color={isPinned ? colors.tint : colors.textTertiary}
                   />
                 </TouchableOpacity>
               )}
@@ -215,7 +218,7 @@ export default function NoteViewerScreen() {
                 <Ionicons
                   name={isEditing ? "checkmark" : "create-outline"}
                   size={24}
-                  color="#007AFF"
+                  color={colors.tint}
                 />
               </TouchableOpacity>
               {!isEditing && (
@@ -231,7 +234,7 @@ export default function NoteViewerScreen() {
                   }
                 >
                   {isBusy ? (
-                    <ActivityIndicator size="small" color="#007AFF" />
+                    <ActivityIndicator size="small" color={colors.tint} />
                   ) : (
                     <Ionicons
                       name={
@@ -240,7 +243,7 @@ export default function NoteViewerScreen() {
                           : "sync-outline"
                       }
                       size={24}
-                      color="#007AFF"
+                      color={colors.tint}
                     />
                   )}
                 </TouchableOpacity>
@@ -253,7 +256,7 @@ export default function NoteViewerScreen() {
       <View style={styles.container}>
         {error ? (
           <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle-outline" size={64} color="#f44336" />
+            <Ionicons name="alert-circle-outline" size={64} color={colors.errorBorder} />
             <Text style={styles.errorTitle}>Error</Text>
             <Text style={styles.errorMessage}>{error}</Text>
           </View>
@@ -269,7 +272,7 @@ export default function NoteViewerScreen() {
               value={editedContent}
               onChangeText={setEditedContent}
               placeholder="Start writing…"
-              placeholderTextColor="#aaa"
+              placeholderTextColor={colors.textTertiary}
               multiline
               autoFocus
               scrollEnabled={false}
@@ -311,71 +314,73 @@ export default function NoteViewerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  headerButtons: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  headerButton: {
-    padding: 4,
-  },
-  pendingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#FFC107",
-    marginRight: 4,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 32,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#f44336",
-    marginTop: 16,
-  },
-  errorMessage: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 8,
-    textAlign: "center",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    padding: 16,
-  },
-  editContent: {
-    flexGrow: 1,
-  },
-  text: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: "#333",
-    fontFamily: "monospace",
-  },
-  emptyHint: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: "#999",
-  },
-  textInput: {
-    flexGrow: 1,
-    padding: 16,
-    fontSize: 16,
-    lineHeight: 24,
-    color: "#333",
-    fontFamily: "monospace",
-    textAlignVertical: "top",
-  },
-});
+function createStyles(c: AppColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    headerButtons: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    headerButton: {
+      padding: 4,
+    },
+    pendingDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: c.pending,
+      marginRight: 4,
+    },
+    errorContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 32,
+    },
+    errorTitle: {
+      fontSize: 20,
+      fontWeight: "600",
+      color: c.errorBorder,
+      marginTop: 16,
+    },
+    errorMessage: {
+      fontSize: 14,
+      color: c.textSecondary,
+      marginTop: 8,
+      textAlign: "center",
+    },
+    scrollView: {
+      flex: 1,
+    },
+    content: {
+      padding: 16,
+    },
+    editContent: {
+      flexGrow: 1,
+    },
+    text: {
+      fontSize: 16,
+      lineHeight: 24,
+      color: c.text,
+      fontFamily: "monospace",
+    },
+    emptyHint: {
+      fontSize: 16,
+      lineHeight: 24,
+      color: c.textTertiary,
+    },
+    textInput: {
+      flexGrow: 1,
+      padding: 16,
+      fontSize: 16,
+      lineHeight: 24,
+      color: c.text,
+      fontFamily: "monospace",
+      textAlignVertical: "top",
+    },
+  });
+}

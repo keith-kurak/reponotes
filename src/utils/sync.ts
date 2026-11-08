@@ -8,6 +8,7 @@ import {
 import {
   fetchFileContentWithSha,
   isConflictError,
+  isNetworkError,
   isNotFoundError,
   listMarkdownFiles,
   putFileContent,
@@ -126,11 +127,18 @@ export interface UploadAllResult {
   uploaded: string[];
   conflicts: string[];
   failed: { path: string; message: string }[];
+  /** True when the upload stopped because GitHub could not be reached. */
+  offline: boolean;
 }
 
 /** Uploads every note with pending changes, one at a time. */
 export async function uploadAllPending(): Promise<UploadAllResult> {
-  const result: UploadAllResult = { uploaded: [], conflicts: [], failed: [] };
+  const result: UploadAllResult = {
+    uploaded: [],
+    conflicts: [],
+    failed: [],
+    offline: false,
+  };
 
   for (const path of pendingChanges.getAll()) {
     if (!localFileExists(path)) {
@@ -141,6 +149,11 @@ export async function uploadAllPending(): Promise<UploadAllResult> {
       const status = await uploadNote(path);
       (status === "uploaded" ? result.uploaded : result.conflicts).push(path);
     } catch (error) {
+      if (isNetworkError(error)) {
+        // No point in trying the other files; they stay pending.
+        result.offline = true;
+        break;
+      }
       result.failed.push({
         path,
         message: error instanceof Error ? error.message : "Upload failed",

@@ -1,5 +1,6 @@
+import { AppColors, useAppColors } from "@/constants/colors";
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Animated, StyleSheet, Text, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -18,6 +19,8 @@ export function Toast({
   onDismiss,
   duration = 5000,
 }: ToastProps) {
+  const colors = useAppColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [opacity] = useState(new Animated.Value(0));
   const insets = useSafeAreaInsets();
 
@@ -60,7 +63,7 @@ export function Toast({
       <Ionicons
         name={isSuccess ? "checkmark-circle" : "alert-circle"}
         size={20}
-        color={isSuccess ? "#2e7d32" : "#c62828"}
+        color={isSuccess ? colors.successText : colors.errorText}
       />
       <Text style={[styles.text, isSuccess ? styles.successText : styles.errorText]}>
         {message}
@@ -71,40 +74,42 @@ export function Toast({
         accessibilityRole="button"
         accessibilityLabel="Dismiss message"
       >
-        <Ionicons name="close" size={18} color={isSuccess ? "#2e7d32" : "#c62828"} />
+        <Ionicons name="close" size={18} color={isSuccess ? colors.successText : colors.errorText} />
       </TouchableOpacity>
     </Animated.View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: "row",
-    alignItems: "center",
-    position: "absolute",
-    left: 16,
-    right: 16,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 8,
-  },
-  successBox: {
-    backgroundColor: "#e8f5e9",
-    borderColor: "#4caf50",
-  },
-  errorBox: {
-    backgroundColor: "#ffebee",
-    borderColor: "#f44336",
-  },
-  text: {
-    flex: 1,
-    fontSize: 14,
-  },
-  successText: {
-    color: "#2e7d32",
-  },
-  errorText: {
-    color: "#c62828",
-  },
-});
+function createStyles(c: AppColors) {
+  return StyleSheet.create({
+    container: {
+      flexDirection: "row",
+      alignItems: "center",
+      position: "absolute",
+      left: 16,
+      right: 16,
+      padding: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      gap: 8,
+    },
+    successBox: {
+      backgroundColor: c.successBackground,
+      borderColor: c.successBorder,
+    },
+    errorBox: {
+      backgroundColor: c.errorBackground,
+      borderColor: c.errorBorder,
+    },
+    text: {
+      flex: 1,
+      fontSize: 14,
+    },
+    successText: {
+      color: c.successText,
+    },
+    errorText: {
+      color: c.errorText,
+    },
+  });
+}

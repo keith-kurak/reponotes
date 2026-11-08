@@ -39,7 +39,7 @@ export default function RootLayout() {
               options={{ title: "Note", headerBackButtonDisplayMode: "minimal" }}
             />
           </Stack>
-          <StatusBar style="dark" />
+          <StatusBar style="auto" />
         </ThemeProvider>
       </QueryClientProvider>
     </KeyboardProvider>

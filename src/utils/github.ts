@@ -35,6 +35,20 @@ export class GitHubAPIError extends Error {
   }
 }
 
+/** Thrown when GitHub cannot be reached (offline, DNS, timeout). */
+export class NetworkError extends Error {
+  constructor() {
+    super(
+      "Cannot reach GitHub. Check your connection. Your changes are saved on this device.",
+    );
+    this.name = "NetworkError";
+  }
+}
+
+export function isNetworkError(error: unknown): boolean {
+  return error instanceof NetworkError;
+}
+
 function friendlyMessage(status: number, githubMessage: string): string {
   switch (status) {
     case 401:
@@ -87,7 +101,7 @@ async function makeGitHubRequest(
       ...(body && { body: JSON.stringify(body) }),
     });
   } catch {
-    throw new Error("Network error: unable to reach GitHub.");
+    throw new NetworkError();
   }
 
   if (!response.ok) {
