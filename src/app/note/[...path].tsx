@@ -1,6 +1,11 @@
 import { AppColors, useAppColors } from "@/constants/colors";
 import { useMarkdownStyle } from "@/constants/markdownStyle";
-import { Toast } from "@/components/Toast";
+import {
+  EditorMode,
+  NoteEditor,
+  NoteEditorHandle,
+} from "@/components/NoteEditor";
+import { Toast, ToastType } from "@/components/Toast";
 import { getFileName, readLocalFile, writeLocalFile } from "@/utils/fileSystem";
 import { noteMetadata } from "@/utils/noteMetadata";
 import { fileSha, pendingChanges } from "@/utils/pendingChanges";
@@ -8,7 +13,7 @@ import { downloadNote, forceUploadNote, uploadNote } from "@/utils/sync";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,12 +22,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { EnrichedMarkdownText } from "react-native-enriched-markdown";
-import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 type SyncOutcome = "uploaded" | "downloaded" | "conflict" | "not-on-github";
 
@@ -48,8 +51,10 @@ export default function NoteViewerScreen() {
   const [initialNote] = useState(() => loadNote(notePath));
   const error = initialNote.error;
   const [content, setContent] = useState(initialNote.content);
-  const [editedContent, setEditedContent] = useState(initialNote.content);
   const [isEditing, setIsEditing] = useState(false);
+  const [editorMode, setEditorMode] = useState<EditorMode>("checking");
+  const [isFinishing, setIsFinishing] = useState(false);
+  const editorRef = useRef<NoteEditorHandle>(null);
   const [hasPendingChanges, setHasPendingChanges] = useState(() =>
     pendingChanges.has(notePath),
   );
@@ -58,16 +63,13 @@ export default function NoteViewerScreen() {
   );
   const [toast, setToast] = useState<{
     visible: boolean;
-    type: "success" | "error";
+    type: ToastType;
     message: string;
   }>({ visible: false, type: "success", message: "" });
 
-  const showToast = useCallback(
-    (type: "success" | "error", message: string) => {
-      setToast({ visible: true, type, message });
-    },
-    [],
-  );
+  const showToast = useCallback((type: ToastType, message: string) => {
+    setToast({ visible: true, type, message });
+  }, []);
 
   const hideToast = useCallback(() => {
     setToast((prev) => ({ ...prev, visible: false }));
@@ -80,18 +82,37 @@ export default function NoteViewerScreen() {
   }, [notePath, error]);
 
   const handleStartEditing = () => {
-    setEditedContent(content);
+    setEditorMode("checking");
     setIsEditing(true);
   };
 
-  const handleFinishEditing = () => {
-    if (editedContent !== content) {
-      writeLocalFile(notePath, editedContent);
-      setContent(editedContent);
-      pendingChanges.add(notePath);
-      setHasPendingChanges(true);
+  const handleEditorModeChange = useCallback((mode: EditorMode) => {
+    setEditorMode(mode);
+  }, []);
+
+  const handleFinishEditing = async () => {
+    const editor = editorRef.current;
+    if (!editor || isFinishing) return;
+    setIsFinishing(true);
+    try {
+      const result = await editor.finish();
+      if (result.status === "review") {
+        // Nothing was saved. The editor now shows the markdown in plain mode,
+        // with a banner that explains why.
+        return;
+      }
+      if (result.markdown !== content) {
+        writeLocalFile(notePath, result.markdown);
+        setContent(result.markdown);
+        pendingChanges.add(notePath);
+        setHasPendingChanges(true);
+      }
+      setIsEditing(false);
+    } catch (err) {
+      showToast("error", errorMessage(err, "Could not save the note"));
+    } finally {
+      setIsFinishing(false);
     }
-    setIsEditing(false);
   };
 
   const handleTogglePin = () => {
@@ -102,7 +123,6 @@ export default function NoteViewerScreen() {
 
   const applyDownloadedContent = (newContent: string) => {
     setContent(newContent);
-    setEditedContent(newContent);
     setHasPendingChanges(false);
   };
 
@@ -212,9 +232,23 @@ export default function NoteViewerScreen() {
                   />
                 </TouchableOpacity>
               )}
+              {isEditing && editorMode === "rich" && (
+                <TouchableOpacity
+                  onPress={() => editorRef.current?.switchToPlain()}
+                  style={styles.headerButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit as plain markdown"
+                >
+                  <Ionicons
+                    name="code-slash-outline"
+                    size={22}
+                    color={colors.tint}
+                  />
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 onPress={isEditing ? handleFinishEditing : handleStartEditing}
-                disabled={!!error || isBusy}
+                disabled={!!error || isBusy || isFinishing}
                 style={styles.headerButton}
                 accessibilityRole="button"
                 accessibilityLabel={isEditing ? "Done editing" : "Edit note"}
@@ -260,30 +294,20 @@ export default function NoteViewerScreen() {
       <View style={styles.container}>
         {error ? (
           <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle-outline" size={64} color={colors.errorBorder} />
+            <Ionicons
+              name="alert-circle-outline"
+              size={64}
+              color={colors.errorBorder}
+            />
             <Text style={styles.errorTitle}>Error</Text>
             <Text style={styles.errorMessage}>{error}</Text>
           </View>
         ) : isEditing ? (
-          <KeyboardAwareScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.editContent}
-            contentInsetAdjustmentBehavior="automatic"
-            keyboardShouldPersistTaps="handled"
-          >
-            <TextInput
-              style={styles.textInput}
-              value={editedContent}
-              onChangeText={setEditedContent}
-              placeholder="Start writing…"
-              placeholderTextColor={colors.textTertiary}
-              multiline
-              autoFocus
-              scrollEnabled={false}
-              textAlignVertical="top"
-              accessibilityLabel="Note text"
-            />
-          </KeyboardAwareScrollView>
+          <NoteEditor
+            ref={editorRef}
+            initialMarkdown={content}
+            onModeChange={handleEditorModeChange}
+          />
         ) : (
           <ScrollView
             style={styles.scrollView}
@@ -306,6 +330,9 @@ export default function NoteViewerScreen() {
                 markdownStyle={markdownStyle}
                 selectable
                 enableTaskListItemToggle={false}
+                // The rich editor writes Enter as a single newline; show it
+                // as a line break, as the editor does.
+                md4cFlags={{ hardSoftBreaks: true }}
                 onLinkPress={({ url }) => {
                   Linking.openURL(url).catch(() =>
                     showToast("error", `Cannot open link: ${url}`),
@@ -372,28 +399,10 @@ function createStyles(c: AppColors) {
     content: {
       padding: 16,
     },
-    editContent: {
-      flexGrow: 1,
-    },
-    text: {
-      fontSize: 16,
-      lineHeight: 24,
-      color: c.text,
-      fontFamily: "monospace",
-    },
     emptyHint: {
       fontSize: 16,
       lineHeight: 24,
       color: c.textTertiary,
-    },
-    textInput: {
-      flexGrow: 1,
-      padding: 16,
-      fontSize: 16,
-      lineHeight: 24,
-      color: c.text,
-      fontFamily: "monospace",
-      textAlignVertical: "top",
     },
   });
 }

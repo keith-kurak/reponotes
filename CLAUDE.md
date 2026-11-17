@@ -27,12 +27,14 @@ src/
 │   │   └── [...path].tsx  # Note viewer/editor (path keeps folders)
 │   └── _layout.tsx        # Root layout with providers
 ├── components/            # Reusable components
+│   ├── NoteEditor.tsx    # Hybrid rich/plain note editor with save checks
 │   └── Toast.tsx         # Auto-dismissing toast notifications
 ├── utils/                 # Utility modules
 │   ├── fileSystem.ts     # Local file operations (expo-file-system)
 │   ├── github.ts         # GitHub API operations
 │   ├── noteMetadata.ts   # Per-file metadata storage
 │   ├── pendingChanges.ts # Tracks unsaved changes (uses noteMetadata)
+│   ├── richEditorSafety.ts # Round-trip and literal-markup checks for the rich editor
 │   ├── routes.ts         # noteHref() link helper for notes
 │   ├── storage.ts        # App settings storage
 │   └── sync.ts           # Sync, upload, conflict resolution
@@ -58,6 +60,13 @@ src/
 - SHA tracking for conflict-free updates
 - New files created without SHA, existing files updated with SHA
 - Sync button shows upload icon when pending changes, sync icon otherwise
+
+### Note editor
+
+- `NoteEditor` uses the enriched-markdown rich editor only when a hidden editor loads and writes the note back unchanged; otherwise it uses a plain markdown `TextInput`
+- On save, the rich output must survive a second round trip, and the visible text must not contain literal markdown characters; if a check fails, nothing is saved and the editor switches to plain mode with a banner
+- The Format menu hides Underline (`_x_` is italic in markdown) and Spoiler (`||x||` is not standard)
+- The viewer uses `hardSoftBreaks` because the rich editor writes Enter as a single newline
 
 ### Navigation
 
