@@ -12,7 +12,7 @@ import { fileSha, pendingChanges } from "@/utils/pendingChanges";
 import { downloadNote, forceUploadNote, uploadNote } from "@/utils/sync";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useLocalSearchParams, usePreventRemove } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -90,16 +90,17 @@ export default function NoteViewerScreen() {
     setEditorMode(mode);
   }, []);
 
-  const handleFinishEditing = async () => {
+  /** Saves the editor's text. Returns true when editing has ended. */
+  const saveEdits = async (): Promise<boolean> => {
     const editor = editorRef.current;
-    if (!editor || isFinishing) return;
+    if (!editor || isFinishing) return false;
     setIsFinishing(true);
     try {
       const result = await editor.finish();
       if (result.status === "review") {
         // Nothing was saved. The editor now shows the markdown in plain mode,
         // with a banner that explains why.
-        return;
+        return false;
       }
       if (result.markdown !== content) {
         writeLocalFile(notePath, result.markdown);
@@ -108,12 +109,26 @@ export default function NoteViewerScreen() {
         setHasPendingChanges(true);
       }
       setIsEditing(false);
+      return true;
     } catch (err) {
       showToast("error", errorMessage(err, "Could not save the note"));
+      return false;
     } finally {
       setIsFinishing(false);
     }
   };
+
+  const handleFinishEditing = () => {
+    void saveEdits();
+  };
+
+  // Going back while editing saves first, like Done. If a save check fails,
+  // the screen stays open with the review banner, so no text is lost.
+  usePreventRemove(isEditing, ({ repeat }) => {
+    void saveEdits().then((saved) => {
+      if (saved) repeat();
+    });
+  });
 
   const handleTogglePin = () => {
     const newPinned = !isPinned;

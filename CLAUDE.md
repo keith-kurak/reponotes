@@ -81,6 +81,7 @@ bun start          # Start Expo dev server
 bun run ios        # Run on iOS simulator
 bun run android    # Run on Android emulator
 bun run lint       # Run ESLint
+bun run test       # Run unit tests (bun test, src/**/__tests__)
 ```
 
 ## Code Style
