@@ -93,9 +93,13 @@ async function makeGitHubRequest(
   try {
     response = await fetch(`${GITHUB_API_BASE}${path}`, {
       method,
+      // GitHub sends "Cache-Control: max-age=60". Without this, the native
+      // HTTP cache can return a file list from before the last upload.
+      cache: "no-store",
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/vnd.github+json",
+        "Cache-Control": "no-cache",
         ...(body && { "Content-Type": "application/json" }),
       },
       ...(body && { body: JSON.stringify(body) }),

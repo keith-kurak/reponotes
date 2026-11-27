@@ -25,12 +25,14 @@ npx eas-cli@latest workflow:run .eas/workflows/dev-builds.yaml
 - iOS: rich text editing with enriched-markdown when a note can be saved without changes; plain markdown otherwise (code blocks, tables, blockquotes)
 - Android: plain markdown editing
 - Markdown keyboard toolbar in plain mode (H1–H3, bullet, checkbox, inline code, code block)
+- Enter continues bullet, checkbox and numbered lists (Enter on an empty item ends the list)
 - Markdown shortcuts in the rich editor (`# `, `- `, `1. `)
 - Non-ASCII text and emoji
 - Light and dark mode
 - Works offline; changes upload when you are online
 - Browse folders; add notes and folders (Android: floating button, iOS: + menu)
-- Home lists every change to sync; status updates live on every screen
+- Home lists every change to sync; status updates live on every screen; tap the status to sync
+- The sync icon turns while a sync runs
 - Choose a version when a note changed on GitHub and on the device (conflict)
 - Going back while editing saves the note
 - Native UI on both platforms with Expo UI: lists, forms, sheets and buttons (SwiftUI on iOS, Jetpack Compose on Android), and native header toolbars

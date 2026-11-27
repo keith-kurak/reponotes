@@ -67,6 +67,8 @@ src/
 - New notes are pending at once, so an empty new note also uploads
 - Screens read notes with `useNotesData(() => ...)`; it reads again after every change (`notesStore`). Do not use `useMemo` with a `void version` dependency: the React Compiler (on in app.json) removes it
 - No per-note upload/download buttons; Home lists all pending changes
+- GitHub requests bypass the HTTP cache (GitHub sends max-age=60); a stale file list once deleted a just-uploaded note
+- The download step skips notes uploaded in the same sync, and deletes a local note only after GitHub answers 404 for that file
 - Use `src/utils/base64.ts` for file content (UTF-8 safe); do not use `atob`/`btoa` directly
 - Files are synced individually via GitHub Contents API
 - SHA tracking for conflict-free updates
@@ -79,6 +81,7 @@ src/
 - The Format menu hides Underline (`_x_` is italic in markdown) and Spoiler (`||x||` is not standard)
 - The viewer uses `hardSoftBreaks` because the rich editor writes Enter as a single newline
 - Android edits plain markdown only (`RICH_EDITING` in NoteEditor); the plain editor has `MarkdownToolbar`
+- In the plain editor, Enter on a list item continues the list (`findTypedNewline` + `continueListOnEnter`)
 
 ### Native UI (Expo UI)
 

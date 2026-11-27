@@ -31,9 +31,15 @@ export interface SyncResult {
  * - Files with pending local changes are never overwritten.
  * - Files that are unchanged on GitHub are not downloaded again.
  * - Local files that were synced before but are now deleted on GitHub are
- *   removed, unless they have pending changes.
+ *   removed, unless they have pending changes. GitHub must confirm the
+ *   deletion ("not found" for that file), so a stale file list never
+ *   removes a note.
+ * - `justUploaded` notes are left alone: the file list can be older than
+ *   the upload a moment ago.
  */
-export async function syncAllFromGitHub(): Promise<SyncResult> {
+export async function syncAllFromGitHub(
+  justUploaded: ReadonlySet<string> = new Set(),
+): Promise<SyncResult> {
   const config = storage.getGitHubConfig();
   const remoteFiles = await listMarkdownFiles(config);
   const remotePaths = new Set(remoteFiles.map((file) => file.path));
@@ -42,6 +48,7 @@ export async function syncAllFromGitHub(): Promise<SyncResult> {
 
   await Promise.all(
     remoteFiles.map(async (file) => {
+      if (justUploaded.has(file.path)) return;
       if (pendingChanges.has(file.path)) {
         result.skippedPending.push(file.path);
         return;
@@ -58,7 +65,15 @@ export async function syncAllFromGitHub(): Promise<SyncResult> {
 
   for (const path of listLocalFiles()) {
     const wasSynced = !!fileSha.get(path);
-    if (wasSynced && !remotePaths.has(path) && !pendingChanges.has(path)) {
+    if (
+      !wasSynced ||
+      remotePaths.has(path) ||
+      pendingChanges.has(path) ||
+      justUploaded.has(path)
+    ) {
+      continue;
+    }
+    if (await isDeletedOnGitHub(config, path)) {
       deleteLocalFile(path);
       noteMetadata.remove(path);
       result.deleted.push(path);
@@ -68,6 +83,19 @@ export async function syncAllFromGitHub(): Promise<SyncResult> {
   result.skippedPending.sort();
   result.deleted.sort();
   return result;
+}
+
+/** True only when GitHub answers "not found" for this file. */
+async function isDeletedOnGitHub(
+  config: ReturnType<typeof storage.getGitHubConfig>,
+  path: string,
+): Promise<boolean> {
+  try {
+    await fetchFileContentWithSha(config, path);
+    return false;
+  } catch (error) {
+    return isNotFoundError(error);
+  }
 }
 
 export type UploadResult = "uploaded" | "conflict";
@@ -195,7 +223,7 @@ export async function syncNow(): Promise<SyncSummary | null> {
     if (upload.offline) {
       throw new NetworkError();
     }
-    const download = await syncAllFromGitHub();
+    const download = await syncAllFromGitHub(new Set(upload.uploaded));
     const summary: SyncSummary = {
       uploaded: upload.uploaded,
       downloaded: download.downloaded,

@@ -1,4 +1,5 @@
 import { AppHost } from "@/components/AppHost";
+import { SpinningSyncIcon } from "@/components/SpinningSyncIcon";
 import { SyncStatusRow } from "@/components/SyncStatusRow";
 import { useAppColors } from "@/constants/colors";
 import { listIcons } from "@/constants/listIcons";
@@ -74,12 +75,17 @@ export default function HomeScreen() {
     <>
       <Stack.Screen options={{ title: "Home" }} />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button
-          icon={toolbarIcons.sync}
-          accessibilityLabel="Sync with GitHub"
-          disabled={isSyncing}
-          onPress={() => void syncNow()}
-        />
+        {isSyncing ? (
+          <Stack.Toolbar.View>
+            <SpinningSyncIcon />
+          </Stack.Toolbar.View>
+        ) : (
+          <Stack.Toolbar.Button
+            icon={toolbarIcons.sync}
+            accessibilityLabel="Sync with GitHub"
+            onPress={() => void syncNow()}
+          />
+        )}
       </Stack.Toolbar>
 
       <AppHost style={{ flex: 1 }}>

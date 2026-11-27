@@ -3,7 +3,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  continueListOnEnter,
   EditState,
+  findTypedNewline,
   insertCodeBlock,
   toggleInlineCode,
   toggleLinePrefix,
@@ -110,5 +112,77 @@ describe("insertCodeBlock", () => {
 
   test("inserts an empty block at the start of a line", () => {
     expect(mark(insertCodeBlock(state("a\n|")))).toBe("a\n```\n|\n```");
+  });
+});
+
+describe("continueListOnEnter", () => {
+  /** Presses Enter at the marked cursor and returns the continued text. */
+  function enter(marked: string): string | null {
+    const before = state(marked);
+    const { start, end } = before.selection;
+    const typed = before.text.slice(0, start) + "\n" + before.text.slice(end);
+    const result = continueListOnEnter(before, typed);
+    return result ? mark(result) : null;
+  }
+
+  test("continues a bullet", () => {
+    expect(enter("- eggs|")).toBe("- eggs\n- |");
+  });
+
+  test("keeps the bullet character and indentation", () => {
+    expect(enter("  * eggs|")).toBe("  * eggs\n  * |");
+  });
+
+  test("continues a checkbox unchecked, also after a checked one", () => {
+    expect(enter("- [x] done|")).toBe("- [x] done\n- [ ] |");
+  });
+
+  test("numbers the next item", () => {
+    expect(enter("9. nine|")).toBe("9. nine\n10. |");
+    expect(enter("1) one|")).toBe("1) one\n2) |");
+  });
+
+  test("splits an item when the cursor is inside the text", () => {
+    expect(enter("- eggs|milk")).toBe("- eggs\n- |milk");
+  });
+
+  test("Enter on an empty item ends the list", () => {
+    expect(enter("- eggs\n- |")).toBe("- eggs\n|");
+    expect(enter("- [ ] |\nnext")).toBe("|\nnext");
+  });
+
+  test("does nothing on a plain line", () => {
+    expect(enter("hello|")).toBeNull();
+    expect(enter("# Title|")).toBeNull();
+  });
+
+  test("does nothing for other edits", () => {
+    const before = state("- eggs|");
+    expect(continueListOnEnter(before, "- eggsx")).toBeNull();
+    expect(continueListOnEnter(before, "- egg")).toBeNull();
+  });
+});
+
+describe("findTypedNewline", () => {
+  test("finds a newline typed at the end of a line", () => {
+    expect(findTypedNewline("- a", "- a\n", 3)).toEqual({ start: 3, end: 3 });
+  });
+
+  test("uses the cursor before the change next to existing newlines", () => {
+    // "- a|\nx": Enter after "- a"
+    expect(findTypedNewline("- a\nx", "- a\n\nx", 3)).toEqual({
+      start: 3,
+      end: 3,
+    });
+    // "- a\n|x": Enter at the start of "x"
+    expect(findTypedNewline("- a\nx", "- a\n\nx", 4)).toEqual({
+      start: 4,
+      end: 4,
+    });
+  });
+
+  test("ignores other edits", () => {
+    expect(findTypedNewline("abc", "abcd", 3)).toBeNull();
+    expect(findTypedNewline("abc", "ab", 3)).toBeNull();
   });
 });

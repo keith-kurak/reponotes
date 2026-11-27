@@ -1,6 +1,11 @@
 import { AppColors, useAppColors } from "@/constants/colors";
 import { MarkdownToolbar } from "@/components/MarkdownToolbar";
-import { EditState, Selection } from "@/utils/markdownCommands";
+import {
+  continueListOnEnter,
+  EditState,
+  findTypedNewline,
+  Selection,
+} from "@/utils/markdownCommands";
 import { Ionicons } from "@expo/vector-icons";
 import {
   findUnsafeLiteralMarkup,
@@ -95,6 +100,24 @@ export function NoteEditor({
     setModeState(next);
     setNotice(reason ?? null);
   }, []);
+
+  // Enter on a list item starts the next item (or ends an empty list).
+  const handlePlainChange = (next: string) => {
+    const enter = findTypedNewline(
+      plainText,
+      next,
+      plainSelectionRef.current.start,
+    );
+    const continued = enter
+      ? continueListOnEnter({ text: plainText, selection: enter }, next)
+      : null;
+    if (continued) {
+      pendingSelectionRef.current = continued.selection;
+      setPlainText(continued.text);
+    } else {
+      setPlainText(next);
+    }
+  };
 
   const applyCommand = useCallback(
     (command: (state: EditState) => EditState) => {
@@ -285,7 +308,7 @@ export function NoteEditor({
             ref={plainInputRef}
             style={styles.plainInput}
             value={plainText}
-            onChangeText={setPlainText}
+            onChangeText={handlePlainChange}
             onSelectionChange={(event) => {
               plainSelectionRef.current = event.nativeEvent.selection;
             }}

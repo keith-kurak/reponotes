@@ -1,6 +1,7 @@
-import { AppHost } from "@/components/AppHost";
 import { AddFab } from "@/components/AddFab";
+import { AppHost } from "@/components/AppHost";
 import { NamePrompt } from "@/components/NamePrompt";
+import { SpinningSyncIcon } from "@/components/SpinningSyncIcon";
 import { SyncStatusRow } from "@/components/SyncStatusRow";
 import { useAppColors } from "@/constants/colors";
 import { listIcons } from "@/constants/listIcons";
@@ -95,12 +96,17 @@ export function FolderView({ folderPath }: { folderPath: string }) {
         options={{ title: folderPath ? getFileName(folderPath) : "Files" }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button
-          icon={toolbarIcons.sync}
-          accessibilityLabel="Sync with GitHub"
-          disabled={isSyncing}
-          onPress={() => void syncNow()}
-        />
+        {isSyncing ? (
+          <Stack.Toolbar.View>
+            <SpinningSyncIcon />
+          </Stack.Toolbar.View>
+        ) : (
+          <Stack.Toolbar.Button
+            icon={toolbarIcons.sync}
+            accessibilityLabel="Sync with GitHub"
+            onPress={() => void syncNow()}
+          />
+        )}
         {Platform.OS === "ios" && (
           <Stack.Toolbar.Menu icon={toolbarIcons.add} accessibilityLabel="Add">
             <Stack.Toolbar.MenuAction

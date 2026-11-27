@@ -1,9 +1,14 @@
 import { useAppColors } from "@/constants/colors";
 import { listIcons } from "@/constants/listIcons";
 import { useSyncStatusLine } from "@/hooks/use-sync-status-line";
+import { syncNow } from "@/utils/sync";
 import { Icon, ListItem, Text } from "@expo/ui";
 
-/** Native list row with the live sync status. Use inside a List or FieldSection. */
+/**
+ * Native list row with the live sync status. Use inside a List or
+ * FieldSection. A tap syncs; with changes to sync (or after a failed sync)
+ * the row says so.
+ */
 export function SyncStatusRow({
   inFieldGroup = false,
 }: {
@@ -26,9 +31,15 @@ export function SyncStatusRow({
         ? listIcons.pending
         : listIcons.upToDate;
 
+  const hasWork = !line.isSyncing && line.tone !== "neutral";
+
   return (
     <ListItem
       colors={inFieldGroup ? { containerColor: "transparent" } : undefined}
+      // Always set: on Android, removing onPress from a ListItem fails
+      // ("Cannot set prop 'modifiers'"). syncNow() ignores a second tap.
+      onPress={() => void syncNow()}
+      supportingText={hasWork ? "Tap to sync now" : undefined}
     >
       <ListItem.Leading>
         <Icon name={icon} size={20} color={color} style={{ width: 28 }} />
