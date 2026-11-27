@@ -18,20 +18,24 @@ npx eas-cli@latest workflow:run .eas/workflows/dev-builds.yaml
 ## Features
 
 - Connect to a GitHub repo with a PAT
-- Sync markdown files with GitHub, including folders
+- Two-way sync with one Sync button: uploads local changes, then downloads changes from GitHub (including folders)
 - Pull changes and deletions made outside the device
 - Sync never overwrites notes with local changes
 - Rendered markdown view (GitHub flavor: tables, task lists, code blocks) with enriched-markdown
-- Rich text editing with enriched-markdown when a note can be saved without changes; plain markdown editing otherwise (code blocks, tables, blockquotes)
+- iOS: rich text editing with enriched-markdown when a note can be saved without changes; plain markdown otherwise (code blocks, tables, blockquotes)
+- Android: plain markdown editing
+- Markdown keyboard toolbar in plain mode (H1–H3, bullet, checkbox, inline code, code block)
 - Markdown shortcuts in the rich editor (`# `, `- `, `1. `)
 - Non-ASCII text and emoji
 - Light and dark mode
 - Works offline; changes upload when you are online
-- Create notes in folders (`folder/name`)
-- Track unsynced changes per note, and upload all from the dashboard
-- Choose a version when a note changed on GitHub (conflict)
-- Pin notes to the dashboard
-- Recently opened files on the dashboard
+- Browse folders; add notes and folders (Android: floating button, iOS: + menu)
+- Home lists every change to sync; status updates live on every screen
+- Choose a version when a note changed on GitHub and on the device (conflict)
+- Going back while editing saves the note
+- Native headers and toolbar buttons (Expo Router `Stack.Toolbar`, Expo UI)
+- Pin notes to Home
+- Recently opened notes on Home
 
 ## TODO
 

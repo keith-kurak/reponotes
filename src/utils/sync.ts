@@ -7,6 +7,7 @@ import {
 } from "./fileSystem";
 import {
   fetchFileContentWithSha,
+  NetworkError,
   isConflictError,
   isNetworkError,
   isNotFoundError,
@@ -16,6 +17,7 @@ import {
 import { noteMetadata } from "./noteMetadata";
 import { fileSha, pendingChanges } from "./pendingChanges";
 import { storage } from "./storage";
+import { getSyncStatus, updateSyncStatus } from "./syncState";
 
 export interface SyncResult {
   downloaded: number;
@@ -84,6 +86,7 @@ export async function uploadNote(path: string): Promise<UploadResult> {
     newSha = await putFileContent(config, path, content, sha);
   } catch (error) {
     if (isConflictError(error)) {
+      noteMetadata.setConflict(path, true);
       return "conflict";
     }
     throw error;
@@ -91,6 +94,7 @@ export async function uploadNote(path: string): Promise<UploadResult> {
 
   fileSha.set(path, newSha);
   pendingChanges.remove(path);
+  noteMetadata.setConflict(path, false);
   return "uploaded";
 }
 
@@ -101,6 +105,7 @@ export async function downloadNote(path: string): Promise<string> {
   writeLocalFile(path, remote.content);
   fileSha.set(path, remote.sha);
   pendingChanges.remove(path);
+  noteMetadata.setConflict(path, false);
   return remote.content;
 }
 
@@ -121,6 +126,7 @@ export async function forceUploadNote(path: string): Promise<void> {
   );
   fileSha.set(path, newSha);
   pendingChanges.remove(path);
+  noteMetadata.setConflict(path, false);
 }
 
 export interface UploadAllResult {
@@ -145,6 +151,11 @@ export async function uploadAllPending(): Promise<UploadAllResult> {
       pendingChanges.remove(path);
       continue;
     }
+    if (noteMetadata.hasConflict(path)) {
+      // Needs a choice from the user; another upload would fail again.
+      result.conflicts.push(path);
+      continue;
+    }
     try {
       const status = await uploadNote(path);
       (status === "uploaded" ? result.uploaded : result.conflicts).push(path);
@@ -161,4 +172,51 @@ export async function uploadAllPending(): Promise<UploadAllResult> {
     }
   }
   return result;
+}
+
+export interface SyncSummary {
+  uploaded: string[];
+  downloaded: number;
+  deleted: string[];
+  conflicts: string[];
+  failed: { path: string; message: string }[];
+}
+
+/**
+ * Two-way sync: uploads every pending change, then downloads changes from
+ * GitHub. Notes with local changes or conflicts are never overwritten.
+ * Progress and errors go to the shared sync status.
+ */
+export async function syncNow(): Promise<SyncSummary | null> {
+  if (getSyncStatus().isSyncing) return null;
+  updateSyncStatus({ isSyncing: true });
+  try {
+    const upload = await uploadAllPending();
+    if (upload.offline) {
+      throw new NetworkError();
+    }
+    const download = await syncAllFromGitHub();
+    const summary: SyncSummary = {
+      uploaded: upload.uploaded,
+      downloaded: download.downloaded,
+      deleted: download.deleted,
+      conflicts: upload.conflicts,
+      failed: upload.failed,
+    };
+    updateSyncStatus({
+      isSyncing: false,
+      lastSyncedAt: Date.now(),
+      lastError:
+        upload.failed.length > 0
+          ? `Could not upload ${upload.failed.map((f) => f.path).join(", ")}: ${upload.failed[0].message}`
+          : null,
+    });
+    return summary;
+  } catch (error) {
+    updateSyncStatus({
+      isSyncing: false,
+      lastError: error instanceof Error ? error.message : "Sync failed",
+    });
+    return null;
+  }
 }

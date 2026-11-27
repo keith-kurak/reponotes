@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 export default function TabLayout() {
   return (
     <NativeTabs>
-      <NativeTabs.Trigger name="index" accessibilityLabel="Home">
+      <NativeTabs.Trigger name="(home)">
         {Platform.select({
           ios: <NativeTabs.Trigger.Icon sf="house" />,
           android: (
@@ -19,9 +19,9 @@ export default function TabLayout() {
             />
           ),
         })}
-        <NativeTabs.Trigger.Label hidden>Home</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="files" accessibilityLabel="Files">
+      <NativeTabs.Trigger name="files">
         {Platform.select({
           ios: <NativeTabs.Trigger.Icon sf="folder" />,
           android: (
@@ -35,9 +35,9 @@ export default function TabLayout() {
             />
           ),
         })}
-        <NativeTabs.Trigger.Label hidden>Files</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Files</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="settings" accessibilityLabel="Settings">
+      <NativeTabs.Trigger name="settings">
         {Platform.select({
           ios: <NativeTabs.Trigger.Icon sf="gearshape" />,
           android: (
@@ -51,7 +51,7 @@ export default function TabLayout() {
             />
           ),
         })}
-        <NativeTabs.Trigger.Label hidden>Settings</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

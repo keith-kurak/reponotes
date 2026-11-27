@@ -1,5 +1,7 @@
 import { AppColors, useAppColors } from "@/constants/colors";
 import { useMarkdownStyle } from "@/constants/markdownStyle";
+import { toolbarIcons } from "@/constants/toolbarIcons";
+import { useNotesData } from "@/hooks/use-notes-version";
 import {
   EditorMode,
   NoteEditor,
@@ -8,8 +10,8 @@ import {
 import { Toast, ToastType } from "@/components/Toast";
 import { getFileName, readLocalFile, writeLocalFile } from "@/utils/fileSystem";
 import { noteMetadata } from "@/utils/noteMetadata";
-import { fileSha, pendingChanges } from "@/utils/pendingChanges";
-import { downloadNote, forceUploadNote, uploadNote } from "@/utils/sync";
+import { pendingChanges } from "@/utils/pendingChanges";
+import { downloadNote, forceUploadNote } from "@/utils/sync";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, usePreventRemove } from "expo-router";
@@ -26,8 +28,6 @@ import {
   View,
 } from "react-native";
 import { EnrichedMarkdownText } from "react-native-enriched-markdown";
-
-type SyncOutcome = "uploaded" | "downloaded" | "conflict" | "not-on-github";
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
@@ -47,20 +47,17 @@ export default function NoteViewerScreen() {
   const markdownStyle = useMarkdownStyle();
   const { path } = useLocalSearchParams<{ path: string[] }>();
   const notePath = Array.isArray(path) ? path.join("/") : (path ?? "");
-  // Local files are read synchronously, so the note loads on the first render.
-  const [initialNote] = useState(() => loadNote(notePath));
-  const error = initialNote.error;
-  const [content, setContent] = useState(initialNote.content);
+  // Read from disk on every change, so a sync updates the open note.
+  const { content, error } = useNotesData(() => loadNote(notePath));
+  const isPinned = useNotesData(() => noteMetadata.isPinned(notePath));
+  const hasConflict = useNotesData(() => noteMetadata.hasConflict(notePath));
+
   const [isEditing, setIsEditing] = useState(false);
+  // The text the editor started with, to know whether it changed.
+  const [editStartContent, setEditStartContent] = useState("");
   const [editorMode, setEditorMode] = useState<EditorMode>("checking");
   const [isFinishing, setIsFinishing] = useState(false);
   const editorRef = useRef<NoteEditorHandle>(null);
-  const [hasPendingChanges, setHasPendingChanges] = useState(() =>
-    pendingChanges.has(notePath),
-  );
-  const [isPinned, setIsPinned] = useState(() =>
-    noteMetadata.isPinned(notePath),
-  );
   const [toast, setToast] = useState<{
     visible: boolean;
     type: ToastType;
@@ -82,6 +79,7 @@ export default function NoteViewerScreen() {
   }, [notePath, error]);
 
   const handleStartEditing = () => {
+    setEditStartContent(content);
     setEditorMode("checking");
     setIsEditing(true);
   };
@@ -102,11 +100,9 @@ export default function NoteViewerScreen() {
         // with a banner that explains why.
         return false;
       }
-      if (result.markdown !== content) {
+      if (result.markdown !== editStartContent) {
         writeLocalFile(notePath, result.markdown);
-        setContent(result.markdown);
         pendingChanges.add(notePath);
-        setHasPendingChanges(true);
       }
       setIsEditing(false);
       return true;
@@ -118,10 +114,6 @@ export default function NoteViewerScreen() {
     }
   };
 
-  const handleFinishEditing = () => {
-    void saveEdits();
-  };
-
   // Going back while editing saves first, like Done. If a save check fails,
   // the screen stays open with the review banner, so no text is lost.
   usePreventRemove(isEditing, ({ repeat }) => {
@@ -130,24 +122,12 @@ export default function NoteViewerScreen() {
     });
   });
 
-  const handleTogglePin = () => {
-    const newPinned = !isPinned;
-    noteMetadata.setPinned(notePath, newPinned);
-    setIsPinned(newPinned);
-  };
-
-  const applyDownloadedContent = (newContent: string) => {
-    setContent(newContent);
-    setHasPendingChanges(false);
-  };
-
   const resolveConflictMutation = useMutation({
     mutationFn: async (choice: "keep-mine" | "use-github") => {
       if (choice === "keep-mine") {
         await forceUploadNote(notePath);
-        setHasPendingChanges(false);
       } else {
-        applyDownloadedContent(await downloadNote(notePath));
+        await downloadNote(notePath);
       }
       return choice;
     },
@@ -162,10 +142,10 @@ export default function NoteViewerScreen() {
     onError: (err) => showToast("error", errorMessage(err, "Sync failed")),
   });
 
-  const showConflictAlert = () => {
+  const confirmUseGitHub = () => {
     Alert.alert(
-      "This note changed on GitHub",
-      "The GitHub version is different from the version you edited. Which version do you want to keep?",
+      "Use the GitHub version?",
+      "Your changes to this note on this device will be replaced.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -173,50 +153,9 @@ export default function NoteViewerScreen() {
           style: "destructive",
           onPress: () => resolveConflictMutation.mutate("use-github"),
         },
-        {
-          text: "Keep mine",
-          onPress: () => resolveConflictMutation.mutate("keep-mine"),
-        },
       ],
     );
   };
-
-  const syncMutation = useMutation({
-    mutationFn: async (): Promise<SyncOutcome> => {
-      if (hasPendingChanges) {
-        const result = await uploadNote(notePath);
-        if (result === "uploaded") setHasPendingChanges(false);
-        return result;
-      }
-      if (!fileSha.get(notePath)) {
-        return "not-on-github";
-      }
-      applyDownloadedContent(await downloadNote(notePath));
-      return "downloaded";
-    },
-    onSuccess: (outcome) => {
-      switch (outcome) {
-        case "uploaded":
-          showToast("success", "Changes saved to GitHub.");
-          break;
-        case "downloaded":
-          showToast("success", "Note is up to date with GitHub.");
-          break;
-        case "not-on-github":
-          showToast(
-            "error",
-            "This note is not on GitHub yet. Edit it, then tap upload.",
-          );
-          break;
-        case "conflict":
-          showConflictAlert();
-          break;
-      }
-    },
-    onError: (err) => showToast("error", errorMessage(err, "Sync failed")),
-  });
-
-  const isBusy = syncMutation.isPending || resolveConflictMutation.isPending;
 
   return (
     <>
@@ -224,87 +163,40 @@ export default function NoteViewerScreen() {
         options={{
           title: notePath ? getFileName(notePath) : "Note",
           headerBackButtonDisplayMode: "minimal",
-          headerRight: () => (
-            <View style={styles.headerButtons}>
-              {hasPendingChanges && !isEditing && (
-                <View
-                  style={styles.pendingDot}
-                  accessible
-                  accessibilityLabel="Has changes not on GitHub"
-                />
-              )}
-              {!isEditing && (
-                <TouchableOpacity
-                  onPress={handleTogglePin}
-                  style={styles.headerButton}
-                  accessibilityRole="button"
-                  accessibilityLabel={isPinned ? "Unpin note" : "Pin note"}
-                >
-                  <Ionicons
-                    name={isPinned ? "pin" : "pin-outline"}
-                    size={22}
-                    color={isPinned ? colors.tint : colors.textTertiary}
-                  />
-                </TouchableOpacity>
-              )}
-              {isEditing && editorMode === "rich" && (
-                <TouchableOpacity
-                  onPress={() => editorRef.current?.switchToPlain()}
-                  style={styles.headerButton}
-                  accessibilityRole="button"
-                  accessibilityLabel="Edit as plain markdown"
-                >
-                  <Ionicons
-                    name="code-slash-outline"
-                    size={22}
-                    color={colors.tint}
-                  />
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                onPress={isEditing ? handleFinishEditing : handleStartEditing}
-                disabled={!!error || isBusy || isFinishing}
-                style={styles.headerButton}
-                accessibilityRole="button"
-                accessibilityLabel={isEditing ? "Done editing" : "Edit note"}
-              >
-                <Ionicons
-                  name={isEditing ? "checkmark" : "create-outline"}
-                  size={24}
-                  color={colors.tint}
-                />
-              </TouchableOpacity>
-              {!isEditing && (
-                <TouchableOpacity
-                  onPress={() => syncMutation.mutate()}
-                  disabled={isBusy}
-                  style={styles.headerButton}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    hasPendingChanges
-                      ? "Upload changes to GitHub"
-                      : "Download latest from GitHub"
-                  }
-                >
-                  {isBusy ? (
-                    <ActivityIndicator size="small" color={colors.tint} />
-                  ) : (
-                    <Ionicons
-                      name={
-                        hasPendingChanges
-                          ? "cloud-upload-outline"
-                          : "sync-outline"
-                      }
-                      size={24}
-                      color={colors.tint}
-                    />
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
-          ),
         }}
       />
+      <Stack.Toolbar placement="right">
+        {!isEditing && (
+          <Stack.Toolbar.Button
+            icon={isPinned ? toolbarIcons.unpin : toolbarIcons.pin}
+            accessibilityLabel={isPinned ? "Unpin note" : "Pin note"}
+            onPress={() => noteMetadata.setPinned(notePath, !isPinned)}
+          />
+        )}
+        {isEditing && editorMode === "rich" && (
+          <Stack.Toolbar.Button
+            icon={toolbarIcons.plainMarkdown}
+            accessibilityLabel="Edit as plain markdown"
+            onPress={() => void editorRef.current?.switchToPlain()}
+          />
+        )}
+        {isEditing ? (
+          <Stack.Toolbar.Button
+            icon={toolbarIcons.done}
+            variant="done"
+            accessibilityLabel="Done editing"
+            disabled={isFinishing}
+            onPress={() => void saveEdits()}
+          />
+        ) : (
+          <Stack.Toolbar.Button
+            icon={toolbarIcons.edit}
+            accessibilityLabel="Edit note"
+            disabled={!!error || resolveConflictMutation.isPending}
+            onPress={handleStartEditing}
+          />
+        )}
+      </Stack.Toolbar>
 
       <View style={styles.container}>
         {error ? (
@@ -320,7 +212,7 @@ export default function NoteViewerScreen() {
         ) : isEditing ? (
           <NoteEditor
             ref={editorRef}
-            initialMarkdown={content}
+            initialMarkdown={editStartContent}
             onModeChange={handleEditorModeChange}
           />
         ) : (
@@ -329,8 +221,45 @@ export default function NoteViewerScreen() {
             contentContainerStyle={styles.content}
             contentInsetAdjustmentBehavior="automatic"
           >
+            {hasConflict && (
+              <View style={styles.conflict} accessibilityRole="alert">
+                <Text style={styles.conflictTitle}>
+                  This note changed on GitHub and on this device
+                </Text>
+                <Text style={styles.conflictText}>
+                  Choose which version to keep.
+                </Text>
+                <View style={styles.conflictButtons}>
+                  {resolveConflictMutation.isPending ? (
+                    <ActivityIndicator color={colors.tint} />
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        style={styles.conflictButton}
+                        onPress={confirmUseGitHub}
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.conflictButtonText}>
+                          Use GitHub version
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.conflictButton, styles.primaryButton]}
+                        onPress={() =>
+                          resolveConflictMutation.mutate("keep-mine")
+                        }
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.primaryButtonText}>Keep mine</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+              </View>
+            )}
             {content.length === 0 ? (
               <Pressable
+                style={styles.emptyArea}
                 onPress={handleStartEditing}
                 accessibilityRole="button"
               >
@@ -375,21 +304,6 @@ function createStyles(c: AppColors) {
       flex: 1,
       backgroundColor: c.background,
     },
-    headerButtons: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    headerButton: {
-      padding: 4,
-    },
-    pendingDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
-      backgroundColor: c.pending,
-      marginRight: 4,
-    },
     errorContainer: {
       flex: 1,
       justifyContent: "center",
@@ -412,7 +326,52 @@ function createStyles(c: AppColors) {
       flex: 1,
     },
     content: {
+      flexGrow: 1,
       padding: 16,
+    },
+    emptyArea: {
+      flexGrow: 1,
+    },
+    conflict: {
+      padding: 12,
+      marginBottom: 16,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: c.errorBorder,
+      backgroundColor: c.errorBackground,
+      gap: 4,
+    },
+    conflictTitle: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: c.errorText,
+    },
+    conflictText: {
+      fontSize: 14,
+      color: c.text,
+    },
+    conflictButtons: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      gap: 8,
+      marginTop: 8,
+    },
+    conflictButton: {
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+    },
+    conflictButtonText: {
+      fontSize: 15,
+      color: c.tint,
+    },
+    primaryButton: {
+      backgroundColor: c.tint,
+    },
+    primaryButtonText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: c.onTint,
     },
     emptyHint: {
       fontSize: 16,

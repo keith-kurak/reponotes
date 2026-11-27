@@ -1,5 +1,7 @@
 import Storage from "expo-sqlite/kv-store";
 
+import { notifyNotesChanged } from "./notesStore";
+
 const NOTES_METADATA_KEY = "notes_metadata";
 
 export interface NoteMetadata {
@@ -7,6 +9,8 @@ export interface NoteMetadata {
   hasPendingChanges?: boolean;
   isPinned?: boolean;
   lastOpenedAt?: number;
+  /** The last upload found a different version on GitHub. */
+  hasConflict?: boolean;
   // Future properties can be added here:
   // isPrivate?: boolean;
   // summary?: string;
@@ -22,6 +26,7 @@ function getAllMetadata(): AllNotesMetadata {
 
 function saveAllMetadata(metadata: AllNotesMetadata): void {
   Storage.setItemSync(NOTES_METADATA_KEY, JSON.stringify(metadata));
+  notifyNotesChanged();
 }
 
 export const noteMetadata = {
@@ -98,5 +103,19 @@ export const noteMetadata = {
 
   getLastOpenedAt(filename: string): number {
     return this.get(filename).lastOpenedAt ?? 0;
+  },
+
+  hasConflict(filename: string): boolean {
+    return this.get(filename).hasConflict ?? false;
+  },
+
+  setConflict(filename: string, hasConflict: boolean): void {
+    this.update(filename, { hasConflict });
+  },
+
+  getAllConflictFiles(): string[] {
+    return Object.entries(getAllMetadata())
+      .filter(([_, meta]) => meta.hasConflict)
+      .map(([filename]) => filename);
   },
 };

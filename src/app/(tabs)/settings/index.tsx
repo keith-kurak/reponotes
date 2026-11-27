@@ -13,7 +13,6 @@ import {
   View,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function SettingsScreen() {
   const colors = useAppColors();
@@ -69,9 +68,10 @@ export default function SettingsScreen() {
   });
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <View style={styles.container}>
       <KeyboardAwareScrollView
         style={styles.scrollView}
+        contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
@@ -169,7 +169,7 @@ export default function SettingsScreen() {
           </View>
         )}
       </KeyboardAwareScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

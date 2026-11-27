@@ -18,26 +18,33 @@ A mobile notes app that syncs markdown files with a GitHub repository.
 ```
 src/
 ├── app/                    # Expo Router pages
-│   ├── (tabs)/            # Tab navigator screens
-│   │   ├── _layout.tsx    # Tab layout with NativeTabs
-│   │   ├── index.tsx      # Dashboard (pinned & recent files)
-│   │   ├── files.tsx      # File list with sync
-│   │   └── settings.tsx   # GitHub configuration
+│   ├── (tabs)/            # Tab navigator screens (each tab is a Stack)
+│   │   ├── _layout.tsx    # Tab layout with NativeTabs (labels visible)
+│   │   ├── (home)/        # Home: sync status, changes to sync, pinned, recent
+│   │   ├── files/         # index.tsx (root) and [...folder].tsx use FolderView
+│   │   └── settings/      # GitHub configuration
 │   ├── note/
 │   │   └── [...path].tsx  # Note viewer/editor (path keeps folders)
 │   └── _layout.tsx        # Root layout with providers
 ├── components/            # Reusable components
+│   ├── AddFab.android.tsx # Expo UI speed-dial FAB (new note / new folder)
+│   ├── FolderView.tsx    # One folder in the Files tab
+│   ├── MarkdownToolbar.tsx # Keyboard toolbar for the plain editor
 │   ├── NoteEditor.tsx    # Hybrid rich/plain note editor with save checks
+│   ├── SyncStatusBar.tsx # Live sync status line
 │   └── Toast.tsx         # Auto-dismissing toast notifications
 ├── utils/                 # Utility modules
 │   ├── fileSystem.ts     # Local file operations (expo-file-system)
 │   ├── github.ts         # GitHub API operations
-│   ├── noteMetadata.ts   # Per-file metadata storage
+│   ├── markdownCommands.ts # Toolbar text commands (headings, lists, code)
+│   ├── noteMetadata.ts   # Per-file metadata storage (sha, pending, conflict, pin)
+│   ├── notesStore.ts     # Change notification for notes and metadata
 │   ├── pendingChanges.ts # Tracks unsaved changes (uses noteMetadata)
 │   ├── richEditorSafety.ts # Round-trip and literal-markup checks for the rich editor
 │   ├── routes.ts         # noteHref() link helper for notes
 │   ├── storage.ts        # App settings storage
-│   └── sync.ts           # Sync, upload, conflict resolution
+│   ├── sync.ts           # syncNow (upload then download), conflict resolution
+│   └── syncState.ts      # Shared sync status (syncing, last sync, last error)
 ├── hooks/                 # Custom React hooks
 └── constants/            # App constants
 ```
@@ -54,12 +61,15 @@ src/
 
 - Notes are identified by their repo path (e.g. `projects/plan.md`) everywhere: local files, metadata keys, and routes
 - Sync logic lives in `src/utils/sync.ts`; screens do not call the GitHub API directly
-- Sync skips notes with pending changes; a stale SHA on upload is a conflict that the user resolves
+- `syncNow()` is the only sync action: upload pending notes one at a time, then download; notes with local changes or conflicts are never overwritten
+- A stale SHA on upload sets `hasConflict`; the note screen shows Keep mine / Use GitHub version
+- New notes are pending at once, so an empty new note also uploads
+- Screens read notes with `useNotesData(() => ...)`; it reads again after every change (`notesStore`). Do not use `useMemo` with a `void version` dependency: the React Compiler (on in app.json) removes it
+- No per-note upload/download buttons; Home lists all pending changes
 - Use `src/utils/base64.ts` for file content (UTF-8 safe); do not use `atob`/`btoa` directly
 - Files are synced individually via GitHub Contents API
 - SHA tracking for conflict-free updates
 - New files created without SHA, existing files updated with SHA
-- Sync button shows upload icon when pending changes, sync icon otherwise
 
 ### Note editor
 
@@ -67,12 +77,15 @@ src/
 - On save, the rich output must survive a second round trip, and the visible text must not contain literal markdown characters; if a check fails, nothing is saved and the editor switches to plain mode with a banner
 - The Format menu hides Underline (`_x_` is italic in markdown) and Spoiler (`||x||` is not standard)
 - The viewer uses `hardSoftBreaks` because the rich editor writes Enter as a single newline
+- Android edits plain markdown only (`RICH_EDITING` in NoteEditor); the plain editor has `MarkdownToolbar`
 
 ### Navigation
 
 - Uses `NativeTabs` from `expo-router/native-tabs` for native tab bar
-- SF Symbols on iOS, Ionicons on Android via `ionicon` prop
-- Note viewer is outside tabs (Stack screen)
+- SF Symbols on iOS, vector icons on Android
+- Header buttons use `Stack.Toolbar` on both platforms; icons come from `src/constants/toolbarIcons.ts` (SF Symbols on iOS, Material XML drawables in `assets/icons` on Android)
+- Android-only Expo UI (Jetpack Compose) code lives in `*.android.tsx` files in `components/`
+- Note viewer is outside tabs (root Stack screen)
 
 ## Commands
 

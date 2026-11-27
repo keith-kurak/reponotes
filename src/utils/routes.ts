@@ -5,3 +5,13 @@ export function noteHref(path: string) {
     params: { path: path.split("/") },
   };
 }
+
+/** Link target for a folder in the Files tab ("" is the root). */
+export function folderHref(path: string) {
+  return path
+    ? {
+        pathname: "/files/[...folder]" as const,
+        params: { folder: path.split("/") },
+      }
+    : ("/files" as const);
+}

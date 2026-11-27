@@ -1,5 +1,7 @@
 import { Directory, File, Paths } from "expo-file-system";
 
+import { notifyNotesChanged } from "./notesStore";
+
 // Notes are stored under <documents>/notes using the same relative path as in
 // the GitHub repository, for example "projects/plan.md".
 const notesDirectory = new Directory(Paths.document, "notes");
@@ -63,6 +65,60 @@ export function listLocalFiles(): string[] {
   return results.sort((a, b) => a.localeCompare(b));
 }
 
+export interface FolderContents {
+  /** Full paths of direct subfolders, e.g. "projects/2026". */
+  folders: string[];
+  /** Full paths of notes directly in the folder. */
+  files: string[];
+}
+
+function folderDirectory(folderPath: string): Directory {
+  const normalized = normalizeNotePath(folderPath);
+  return normalized
+    ? new Directory(notesDirectory, ...normalized.split("/"))
+    : notesDirectory;
+}
+
+/** Lists the direct children of a folder ("" is the root). */
+export function listFolder(folderPath: string): FolderContents {
+  ensureNotesDirectory();
+  const directory = folderDirectory(folderPath);
+  const prefix = normalizeNotePath(folderPath);
+  const result: FolderContents = { folders: [], files: [] };
+  if (!directory.exists) return result;
+  for (const item of directory.list()) {
+    const path = prefix ? `${prefix}/${item.name}` : item.name;
+    if (item instanceof Directory) {
+      result.folders.push(path);
+    } else if (item instanceof File && isNoteFile(item.name)) {
+      result.files.push(path);
+    }
+  }
+  const byName = (a: string, b: string) =>
+    getFileName(a).localeCompare(getFileName(b));
+  result.folders.sort(byName);
+  result.files.sort(byName);
+  return result;
+}
+
+export function localFolderExists(folderPath: string): boolean {
+  ensureNotesDirectory();
+  return folderDirectory(folderPath).exists;
+}
+
+/**
+ * Creates a local folder. GitHub cannot store an empty folder, so the folder
+ * exists only on this device until it has a note.
+ */
+export function createLocalFolder(folderPath: string): void {
+  ensureNotesDirectory();
+  const directory = folderDirectory(folderPath);
+  if (!directory.exists) {
+    directory.create({ intermediates: true });
+  }
+  notifyNotesChanged();
+}
+
 export function localFileExists(path: string): boolean {
   ensureNotesDirectory();
   return noteFile(path).exists;
@@ -86,6 +142,7 @@ export function writeLocalFile(path: string, content: string): void {
     file.create({ intermediates: true });
   }
   file.write(content);
+  notifyNotesChanged();
 }
 
 export function deleteLocalFile(path: string): void {
@@ -107,6 +164,7 @@ export function deleteLocalFile(path: string): void {
     directory.delete();
     directory = parent;
   }
+  notifyNotesChanged();
 }
 
 export function clearAllLocalFiles(): void {

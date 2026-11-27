@@ -1,4 +1,6 @@
 import { AppColors, useAppColors } from "@/constants/colors";
+import { MarkdownToolbar } from "@/components/MarkdownToolbar";
+import { EditState, Selection } from "@/utils/markdownCommands";
 import { Ionicons } from "@expo/vector-icons";
 import {
   findUnsafeLiteralMarkup,
@@ -6,6 +8,7 @@ import {
   withOriginalTrailingWhitespace,
 } from "@/utils/richEditorSafety";
 import {
+  ComponentRef,
   Ref,
   useCallback,
   useEffect,
@@ -30,6 +33,12 @@ import {
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 export type EditorMode = "checking" | "rich" | "plain";
+
+/**
+ * Rich (WYSIWYG) editing is iOS only. On Android the enriched-markdown input
+ * has no formatting controls, so notes are edited as plain markdown there.
+ */
+const RICH_EDITING = Platform.OS === "ios";
 
 export type FinishResult =
   | { status: "saved"; markdown: string }
@@ -64,11 +73,17 @@ export function NoteEditor({
   const styles = useMemo(() => createStyles(colors), [colors]);
   const inputStyle = useMemo(() => createInputMarkdownStyle(colors), [colors]);
 
-  // An empty note has nothing to lose, so it opens in rich mode at once.
-  const [mode, setModeState] = useState<EditorMode>(
-    initialMarkdown.trim() === "" ? "rich" : "checking",
-  );
+  // On iOS an empty note has nothing to lose, so it opens in rich mode at
+  // once. Android always edits plain markdown (see RICH_EDITING).
+  const [mode, setModeState] = useState<EditorMode>(() => {
+    if (!RICH_EDITING) return "plain";
+    return initialMarkdown.trim() === "" ? "rich" : "checking";
+  });
   const [plainText, setPlainText] = useState(initialMarkdown);
+  const plainInputRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const plainSelectionRef = useRef<Selection>({ start: 0, end: 0 });
+  // Selection to apply after a toolbar command changes the text.
+  const pendingSelectionRef = useRef<Selection | null>(null);
   // Why the editor is in plain mode; shown in a banner until editing ends.
   const [notice, setNotice] = useState<string | null>(null);
   const richRef = useRef<EnrichedMarkdownTextInputInstance>(null);
@@ -80,6 +95,27 @@ export function NoteEditor({
     setModeState(next);
     setNotice(reason ?? null);
   }, []);
+
+  const applyCommand = useCallback(
+    (command: (state: EditState) => EditState) => {
+      const next = command({
+        text: plainText,
+        selection: plainSelectionRef.current,
+      });
+      pendingSelectionRef.current = next.selection;
+      setPlainText(next.text);
+    },
+    [plainText],
+  );
+
+  // Put the cursor where the toolbar command left it.
+  useEffect(() => {
+    const selection = pendingSelectionRef.current;
+    if (!selection) return;
+    pendingSelectionRef.current = null;
+    plainSelectionRef.current = selection;
+    plainInputRef.current?.setSelection(selection.start, selection.end);
+  }, [plainText]);
 
   // Report every mode to the parent, including the first one.
   useEffect(() => {
@@ -246,9 +282,13 @@ export function NoteEditor({
             </View>
           )}
           <TextInput
+            ref={plainInputRef}
             style={styles.plainInput}
             value={plainText}
             onChangeText={setPlainText}
+            onSelectionChange={(event) => {
+              plainSelectionRef.current = event.nativeEvent.selection;
+            }}
             placeholder="Start writing…"
             placeholderTextColor={colors.textTertiary}
             multiline
@@ -262,20 +302,24 @@ export function NoteEditor({
         </KeyboardAwareScrollView>
       )}
 
+      {mode === "plain" && <MarkdownToolbar onCommand={applyCommand} />}
+
       {/* Hidden editor used only for round-trip checks. */}
-      <View
-        style={styles.verifier}
-        pointerEvents="none"
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-      >
-        <EnrichedMarkdownTextInput
-          ref={verifierRef}
-          editable={false}
-          scrollEnabled={false}
-          style={styles.verifierInput}
-        />
-      </View>
+      {RICH_EDITING && (
+        <View
+          style={styles.verifier}
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
+          <EnrichedMarkdownTextInput
+            ref={verifierRef}
+            editable={false}
+            scrollEnabled={false}
+            style={styles.verifierInput}
+          />
+        </View>
+      )}
     </View>
   );
 }
