@@ -18,16 +18,29 @@ npx eas-cli@latest workflow:run .eas/workflows/dev-builds.yaml
 ## Features
 
 - Connect to a GitHub repo with a PAT
-- Sync markdown files with GitHub
-- View and edit notes
-- Track unsynced changes per note
-- Pin notes to the dashboard
-- Recent files on the dashboard
+- Two-way sync with one Sync button: uploads local changes, then downloads changes from GitHub (including folders)
+- Pull changes and deletions made outside the device
+- Sync never overwrites notes with local changes
+- Rendered markdown view (GitHub flavor: tables, task lists, code blocks) with enriched-markdown
+- iOS: rich text editing with enriched-markdown when a note can be saved without changes; plain markdown otherwise (code blocks, tables, blockquotes)
+- Android: plain markdown editing
+- Markdown keyboard toolbar in plain mode (H1–H3, bullet, checkbox, inline code, code block)
+- Enter continues bullet, checkbox and numbered lists (Enter on an empty item ends the list)
+- Markdown shortcuts in the rich editor (`# `, `- `, `1. `)
+- Non-ASCII text and emoji
+- Light and dark mode
+- Works offline; changes upload when you are online
+- Browse folders; add notes and folders (Android: floating button, iOS: + menu)
+- Home lists every change to sync; status updates live on every screen; tap the status to sync
+- The sync icon turns while a sync runs
+- Choose a version when a note changed on GitHub and on the device (conflict)
+- Going back while editing saves the note
+- Native UI on both platforms with Expo UI: lists, forms, sheets and buttons (SwiftUI on iOS, Jetpack Compose on Android), and native header toolbars
+- Pin notes to Home
+- Recently opened notes on Home
 
 ## TODO
 
 - Live user testing of basic connection and editing features
 - Ensure file deletion is working
-- Ensure folders can be created
-- Pull changes made outside the device from the repo
-- Switch to [enriched-markdown](https://github.com/software-mansion/enriched-markdown) for editing
+- Rich editing for code blocks and blockquotes (block-based editor, or wait for [enriched-markdown#896](https://github.com/software-mansion/enriched-markdown/issues/896))

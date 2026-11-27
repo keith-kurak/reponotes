@@ -1,16 +1,22 @@
 import Storage from "expo-sqlite/kv-store";
 
+import { notifyNotesChanged } from "./notesStore";
+
 const NOTES_METADATA_KEY = "notes_metadata";
 
 export interface NoteMetadata {
   sha?: string;
   hasPendingChanges?: boolean;
   isPinned?: boolean;
+  lastOpenedAt?: number;
+  /** The last upload found a different version on GitHub. */
+  hasConflict?: boolean;
   // Future properties can be added here:
   // isPrivate?: boolean;
   // summary?: string;
 }
 
+// Keys are note paths relative to the repository root, e.g. "projects/plan.md".
 type AllNotesMetadata = Record<string, NoteMetadata>;
 
 function getAllMetadata(): AllNotesMetadata {
@@ -20,6 +26,7 @@ function getAllMetadata(): AllNotesMetadata {
 
 function saveAllMetadata(metadata: AllNotesMetadata): void {
   Storage.setItemSync(NOTES_METADATA_KEY, JSON.stringify(metadata));
+  notifyNotesChanged();
 }
 
 export const noteMetadata = {
@@ -87,6 +94,28 @@ export const noteMetadata = {
     const all = getAllMetadata();
     return Object.entries(all)
       .filter(([_, meta]) => meta.isPinned)
+      .map(([filename]) => filename);
+  },
+
+  markOpened(filename: string): void {
+    this.update(filename, { lastOpenedAt: Date.now() });
+  },
+
+  getLastOpenedAt(filename: string): number {
+    return this.get(filename).lastOpenedAt ?? 0;
+  },
+
+  hasConflict(filename: string): boolean {
+    return this.get(filename).hasConflict ?? false;
+  },
+
+  setConflict(filename: string, hasConflict: boolean): void {
+    this.update(filename, { hasConflict });
+  },
+
+  getAllConflictFiles(): string[] {
+    return Object.entries(getAllMetadata())
+      .filter(([_, meta]) => meta.hasConflict)
       .map(([filename]) => filename);
   },
 };
