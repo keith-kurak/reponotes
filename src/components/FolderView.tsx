@@ -1,10 +1,12 @@
+import { AppHost } from "@/components/AppHost";
 import { AddFab } from "@/components/AddFab";
 import { NamePrompt } from "@/components/NamePrompt";
-import { SyncStatusBar } from "@/components/SyncStatusBar";
-import { AppColors, useAppColors } from "@/constants/colors";
+import { SyncStatusRow } from "@/components/SyncStatusRow";
+import { useAppColors } from "@/constants/colors";
+import { listIcons } from "@/constants/listIcons";
 import { toolbarIcons } from "@/constants/toolbarIcons";
 import { useNotesData } from "@/hooks/use-notes-version";
-import { usePendingNotes } from "@/hooks/use-pending-notes";
+import { PendingState, usePendingNotes } from "@/hooks/use-pending-notes";
 import { useSyncStatus } from "@/hooks/use-sync-status";
 import {
   createLocalFolder,
@@ -18,17 +20,16 @@ import {
 import { pendingChanges } from "@/utils/pendingChanges";
 import { folderHref, noteHref } from "@/utils/routes";
 import { syncNow } from "@/utils/sync";
-import { Ionicons } from "@expo/vector-icons";
-import { Link, router, Stack } from "expo-router";
+import { Icon, List, ListItem, Text } from "@expo/ui";
+import { router, Stack } from "expo-router";
 import { useMemo, useState } from "react";
-import {
-  FlatList,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Platform } from "react-native";
+
+const STATE_LABEL: Record<PendingState, string> = {
+  conflict: "Conflict",
+  new: "Not synced",
+  edited: "Not synced",
+};
 
 type Row = { kind: "folder" | "note"; path: string };
 
@@ -39,7 +40,6 @@ function joinPath(folder: string, name: string): string {
 /** Lists one folder: subfolders first, then notes. */
 export function FolderView({ folderPath }: { folderPath: string }) {
   const colors = useAppColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
   const { notes: pendingNotes } = usePendingNotes();
   const { isSyncing } = useSyncStatus();
   const [prompt, setPrompt] = useState<"note" | "folder" | null>(null);
@@ -84,55 +84,10 @@ export function FolderView({ folderPath }: { folderPath: string }) {
     return null;
   };
 
-  const renderItem = ({ item }: { item: Row }) => {
-    const name = getFileName(item.path);
-    if (item.kind === "folder") {
-      return (
-        <Link href={folderHref(item.path)} asChild>
-          <TouchableOpacity
-            style={styles.row}
-            accessibilityLabel={`Folder ${name}`}
-          >
-            <Ionicons name="folder-outline" size={24} color={colors.tint} />
-            <Text style={styles.name}>{name}</Text>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={colors.iconMuted}
-            />
-          </TouchableOpacity>
-        </Link>
-      );
-    }
-    const state = pendingState.get(item.path);
-    return (
-      <Link href={noteHref(item.path)} asChild>
-        <TouchableOpacity
-          style={styles.row}
-          accessibilityLabel={
-            state === "conflict"
-              ? `${name}, conflict`
-              : state
-                ? `${name}, not synced`
-                : name
-          }
-        >
-          <Ionicons
-            name="document-text-outline"
-            size={24}
-            color={colors.icon}
-          />
-          <Text style={styles.name}>{name}</Text>
-          {state === "conflict" ? (
-            <Text style={styles.conflict}>Conflict</Text>
-          ) : state ? (
-            <View style={styles.pendingDot} />
-          ) : null}
-          <Ionicons name="chevron-forward" size={20} color={colors.iconMuted} />
-        </TouchableOpacity>
-      </Link>
+  const open = (row: Row) =>
+    router.push(
+      row.kind === "folder" ? folderHref(row.path) : noteHref(row.path),
     );
-  };
 
   return (
     <>
@@ -164,111 +119,110 @@ export function FolderView({ folderPath }: { folderPath: string }) {
         )}
       </Stack.Toolbar>
 
-      <FlatList
-        style={styles.list}
-        contentInsetAdjustmentBehavior="automatic"
-        data={rows}
-        keyExtractor={(item) => `${item.kind}:${item.path}`}
-        renderItem={renderItem}
-        ListHeaderComponent={<SyncStatusBar />}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons
-              name="folder-open-outline"
-              size={56}
-              color={colors.iconMuted}
-            />
-            <Text style={styles.emptyTitle}>
-              {folderPath ? "This folder is empty" : "No notes yet"}
-            </Text>
-            <Text style={styles.emptyHint}>
-              {folderPath
-                ? "GitHub saves a folder only when it has a note. Add a note to keep it."
-                : "Sync to download notes from GitHub, or add a note."}
-            </Text>
-          </View>
-        }
-        refreshing={false}
-        onRefresh={() => void syncNow()}
-        contentContainerStyle={styles.listContent}
-      />
+      <AppHost style={{ flex: 1 }}>
+        <List
+          onRefresh={async () => {
+            await syncNow();
+          }}
+        >
+          <SyncStatusRow />
+          {rows.length === 0 ? (
+            <ListItem
+              supportingText={
+                folderPath
+                  ? "GitHub saves a folder only when it has a note. Add a note to keep it."
+                  : "Sync to download notes from GitHub, or add a note."
+              }
+            >
+              <Text textStyle={{ color: colors.textSecondary }}>
+                {folderPath ? "This folder is empty" : "No notes yet"}
+              </Text>
+            </ListItem>
+          ) : (
+            <List.ForEach
+              data={rows}
+              keyExtractor={(row) => `${row.kind}:${row.path}`}
+            >
+              {({ item }) => {
+                const state = pendingState.get(item.path);
+                return (
+                  <ListItem onPress={() => open(item)}>
+                    <ListItem.Leading>
+                      <Icon
+                        name={
+                          item.kind === "folder"
+                            ? listIcons.folder
+                            : listIcons.note
+                        }
+                        size={22}
+                        // Same width for every symbol, so the names line up.
+                        style={{ width: 28 }}
+                        color={
+                          item.kind === "folder" ? colors.tint : colors.icon
+                        }
+                        accessibilityLabel={
+                          item.kind === "folder" ? "Folder" : "Note"
+                        }
+                      />
+                    </ListItem.Leading>
+                    <Text textStyle={{ color: colors.text }}>
+                      {getFileName(item.path)}
+                    </Text>
+                    {item.kind === "folder" && Platform.OS === "ios" ? (
+                      // iOS shows a disclosure chevron on rows that open a list.
+                      <ListItem.Trailing>
+                        <Icon
+                          name="chevron.right"
+                          size={13}
+                          color={colors.textTertiary}
+                        />
+                      </ListItem.Trailing>
+                    ) : state ? (
+                      <ListItem.Trailing>
+                        <Text
+                          textStyle={{
+                            fontSize: 13,
+                            color:
+                              state === "conflict"
+                                ? colors.errorText
+                                : colors.warningText,
+                          }}
+                        >
+                          {STATE_LABEL[state]}
+                        </Text>
+                      </ListItem.Trailing>
+                    ) : null}
+                  </ListItem>
+                );
+              }}
+            </List.ForEach>
+          )}
+        </List>
+
+        <NamePrompt
+          visible={prompt === "note"}
+          title="New note"
+          placeholder="Name"
+          hint=".md is added if there is no extension."
+          confirmLabel="Create"
+          onSubmit={createNote}
+          onCancel={() => setPrompt(null)}
+        />
+        <NamePrompt
+          visible={prompt === "folder"}
+          title="New folder"
+          placeholder="Name"
+          hint="Use / to make nested folders."
+          confirmLabel="Create"
+          onSubmit={createFolder}
+          onCancel={() => setPrompt(null)}
+        />
+      </AppHost>
 
       <AddFab
         onNewNote={() => setPrompt("note")}
         onNewFolder={() => setPrompt("folder")}
       />
-
-      <NamePrompt
-        visible={prompt === "note"}
-        title="New note"
-        placeholder="name"
-        hint=".md is added if there is no extension."
-        confirmLabel="Create"
-        onSubmit={createNote}
-        onCancel={() => setPrompt(null)}
-      />
-      <NamePrompt
-        visible={prompt === "folder"}
-        title="New folder"
-        placeholder="name"
-        hint="Use / to make nested folders."
-        confirmLabel="Create"
-        onSubmit={createFolder}
-        onCancel={() => setPrompt(null)}
-      />
     </>
   );
-}
-
-function createStyles(c: AppColors) {
-  return StyleSheet.create({
-    list: {
-      flex: 1,
-      backgroundColor: c.background,
-    },
-    listContent: {
-      // Room for the Android floating action button.
-      paddingBottom: Platform.OS === "android" ? 96 : 16,
-    },
-    row: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: c.border,
-      gap: 12,
-    },
-    name: {
-      flex: 1,
-      fontSize: 16,
-      color: c.text,
-    },
-    pendingDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
-      backgroundColor: c.pending,
-    },
-    conflict: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: c.errorText,
-    },
-    empty: {
-      alignItems: "center",
-      padding: 32,
-      gap: 8,
-    },
-    emptyTitle: {
-      fontSize: 18,
-      fontWeight: "600",
-      color: c.textTertiary,
-    },
-    emptyHint: {
-      fontSize: 14,
-      color: c.textTertiary,
-      textAlign: "center",
-    },
-  });
 }

@@ -1,248 +1,131 @@
-import { AppColors, useAppColors } from "@/constants/colors";
+import { AppHost } from "@/components/AppHost";
+import { useAppColors } from "@/constants/colors";
 import { testConnection, TestConnectionResult } from "@/utils/github";
 import { storage } from "@/utils/storage";
+import { Button, FieldGroup, Text, TextInput, useNativeState } from "@expo/ui";
 import { useMutation } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Keyboard,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import { useState } from "react";
+import { Keyboard } from "react-native";
 
 export default function SettingsScreen() {
   const colors = useAppColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const owner = useNativeState(storage.getGitHubOwner() || "");
+  const repoName = useNativeState(
+    storage.getRepoName() || "reponotes-notebook",
+  );
   // The token field is write-only: it starts empty and is cleared after each
   // save. An empty field keeps the saved token. This also stops iOS from
   // offering to save the token as a password when the screen changes.
-  const [githubPAT, setGithubPAT] = useState("");
+  const token = useNativeState("");
   const [savedToken, setSavedToken] = useState(
     () => storage.getGitHubPAT() || "",
   );
-  const [repoName, setRepoName] = useState(
-    () => storage.getRepoName() || "reponotes-notebook",
-  );
-  const [owner, setOwner] = useState(() => storage.getGitHubOwner() || "");
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(
     null,
   );
 
   const testMutation = useMutation({
     mutationFn: async () => {
-      const token = githubPAT.trim() || savedToken;
-      if (!token) {
-        throw new Error("GitHub PAT is required");
-      }
-      if (!owner.trim()) {
-        throw new Error("GitHub owner/username is required");
-      }
-      if (!repoName.trim()) {
-        throw new Error("Repository name is required");
-      }
+      const newToken = token.get().trim() || savedToken;
+      const ownerValue = owner.get().trim();
+      const repoValue = repoName.get().trim();
+      if (!newToken) throw new Error("GitHub PAT is required");
+      if (!ownerValue) throw new Error("GitHub owner/username is required");
+      if (!repoValue) throw new Error("Repository name is required");
 
-      storage.setGitHubPAT(token);
-      storage.setRepoName(repoName.trim());
-      storage.setGitHubOwner(owner.trim());
-      setSavedToken(token);
-      setGithubPAT("");
+      storage.setGitHubPAT(newToken);
+      storage.setRepoName(repoValue);
+      storage.setGitHubOwner(ownerValue);
+      setSavedToken(newToken);
+      token.set("");
       return await testConnection({
-        token,
-        owner: owner.trim(),
-        repoName: repoName.trim(),
+        token: newToken,
+        owner: ownerValue,
+        repoName: repoValue,
       });
     },
-    onSuccess: (result) => {
-      setTestResult(result);
-    },
-    onError: (error: Error) => {
-      setTestResult({
-        success: false,
-        message: error.message,
-      });
-    },
+    onSuccess: (result) => setTestResult(result),
+    onError: (error: Error) =>
+      setTestResult({ success: false, message: error.message }),
   });
 
   return (
-    <View style={styles.container}>
-      <KeyboardAwareScrollView
-        style={styles.scrollView}
-        contentInsetAdjustmentBehavior="automatic"
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-      >
-        <View style={styles.section}>
-          <Text style={styles.label}>GitHub Owner/Username</Text>
+    <AppHost style={{ flex: 1 }}>
+      <FieldGroup>
+        <FieldGroup.Section title="GitHub owner or username">
           <TextInput
-            style={styles.input}
             value={owner}
-            onChangeText={setOwner}
             placeholder="your-github-username"
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="off"
-            textContentType="none"
-            placeholderTextColor={colors.textTertiary}
             accessibilityLabel="GitHub owner or username"
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.label}>Repository Name</Text>
-          <TextInput
-            style={styles.input}
-            value={repoName}
-            onChangeText={setRepoName}
-            placeholder="reponotes-notebook"
             autoCapitalize="none"
             autoCorrect={false}
             autoComplete="off"
-            textContentType="none"
             placeholderTextColor={colors.textTertiary}
-            accessibilityLabel="Repository name"
           />
-        </View>
+        </FieldGroup.Section>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>GitHub Personal Access Token</Text>
+        <FieldGroup.Section title="Repository">
           <TextInput
-            style={styles.input}
-            value={githubPAT}
-            onChangeText={setGithubPAT}
+            value={repoName}
+            placeholder="reponotes-notebook"
+            accessibilityLabel="Repository name"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="off"
+            placeholderTextColor={colors.textTertiary}
+          />
+        </FieldGroup.Section>
+
+        <FieldGroup.Section title="Personal access token">
+          <TextInput
+            value={token}
             placeholder={
               savedToken
                 ? `Saved token ending in …${savedToken.slice(-4)}`
-                : "github_pat_xxxxxxxxxxxx"
+                : "github_pat_…"
             }
+            accessibilityLabel="GitHub personal access token"
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
             autoComplete="off"
-            textContentType="oneTimeCode"
             placeholderTextColor={colors.textTertiary}
-            accessibilityLabel="GitHub personal access token"
           />
-          <Text style={styles.hint}>
-            Create a fine-grained token at github.com/settings/tokens with
-            access to this repository and Contents: Read and write.
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          style={[
-            styles.button,
-            testMutation.isPending && styles.buttonDisabled,
-          ]}
-          onPress={() => {
-            Keyboard.dismiss();
-            testMutation.mutate();
-          }}
-          disabled={testMutation.isPending}
-          accessibilityRole="button"
-        >
-          {testMutation.isPending ? (
-            <ActivityIndicator color={colors.onTint} />
-          ) : (
-            <Text style={styles.buttonText}>Save and Test Connection</Text>
-          )}
-        </TouchableOpacity>
-
-        {testResult && (
-          <View
-            style={[
-              styles.resultBox,
-              testResult.success ? styles.successBox : styles.errorBox,
-            ]}
-          >
-            <Text
-              style={[
-                styles.resultText,
-                testResult.success ? styles.successText : styles.errorText,
-              ]}
-            >
-              {testResult.message}
+          <FieldGroup.SectionFooter>
+            <Text textStyle={{ fontSize: 13, color: colors.textTertiary }}>
+              Create a fine-grained token at github.com/settings/tokens with
+              access to this repository and Contents: Read and write.
             </Text>
-          </View>
-        )}
-      </KeyboardAwareScrollView>
-    </View>
-  );
-}
+          </FieldGroup.SectionFooter>
+        </FieldGroup.Section>
 
-function createStyles(c: AppColors) {
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: c.background,
-    },
-    scrollView: {
-      flex: 1,
-      padding: 16,
-    },
-    section: {
-      marginBottom: 24,
-    },
-    label: {
-      fontSize: 16,
-      fontWeight: "600",
-      marginBottom: 8,
-      color: c.text,
-    },
-    input: {
-      color: c.text,
-      borderWidth: 1,
-      borderColor: c.inputBorder,
-      borderRadius: 8,
-      padding: 12,
-      fontSize: 16,
-      backgroundColor: c.inputBackground,
-    },
-    hint: {
-      fontSize: 12,
-      color: c.textSecondary,
-      marginTop: 4,
-    },
-    button: {
-      backgroundColor: c.tint,
-      padding: 16,
-      borderRadius: 8,
-      alignItems: "center",
-      marginTop: 8,
-    },
-    buttonDisabled: {
-      backgroundColor: c.disabled,
-    },
-    buttonText: {
-      color: c.onTint,
-      fontSize: 16,
-      fontWeight: "600",
-    },
-    resultBox: {
-      marginTop: 16,
-      padding: 12,
-      borderRadius: 8,
-      borderWidth: 1,
-    },
-    successBox: {
-      backgroundColor: c.successBackground,
-      borderColor: c.successBorder,
-    },
-    errorBox: {
-      backgroundColor: c.errorBackground,
-      borderColor: c.errorBorder,
-    },
-    resultText: {
-      fontSize: 14,
-    },
-    successText: {
-      color: c.successText,
-    },
-    errorText: {
-      color: c.errorText,
-    },
-  });
+        <FieldGroup.Section>
+          <Button
+            label={
+              testMutation.isPending ? "Testing…" : "Save and Test Connection"
+            }
+            disabled={testMutation.isPending}
+            onPress={() => {
+              Keyboard.dismiss();
+              testMutation.mutate();
+            }}
+          />
+          {testResult ? (
+            <FieldGroup.SectionFooter>
+              <Text
+                textStyle={{
+                  fontSize: 13,
+                  color: testResult.success
+                    ? colors.successText
+                    : colors.errorText,
+                }}
+              >
+                {testResult.message}
+              </Text>
+            </FieldGroup.SectionFooter>
+          ) : null}
+        </FieldGroup.Section>
+      </FieldGroup>
+    </AppHost>
+  );
 }

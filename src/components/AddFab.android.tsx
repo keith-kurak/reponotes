@@ -1,5 +1,4 @@
-import { useAppColors } from "@/constants/colors";
-import { Host } from "@expo/ui";
+import { AppHost } from "@/components/AppHost";
 import {
   AnimatedVisibility,
   Column,
@@ -19,7 +18,6 @@ import type { AddFabProps } from "./AddFab";
  * Material speed-dial button: tap + to show "New note" and "New folder".
  */
 export function AddFab({ onNewNote, onNewFolder }: AddFabProps) {
-  const colors = useAppColors();
   const [expanded, setExpanded] = useState(false);
 
   const choose = (action: () => void) => {
@@ -29,7 +27,7 @@ export function AddFab({ onNewNote, onNewFolder }: AddFabProps) {
 
   return (
     <View style={styles.container} pointerEvents="box-none">
-      <Host matchContents seedColor={colors.tint}>
+      <AppHost matchContents>
         <Column
           horizontalAlignment="end"
           verticalArrangement={{ spacedBy: 12 }}
@@ -84,7 +82,7 @@ export function AddFab({ onNewNote, onNewFolder }: AddFabProps) {
             </FloatingActionButton.Icon>
           </FloatingActionButton>
         </Column>
-      </Host>
+      </AppHost>
     </View>
   );
 }

@@ -33,7 +33,7 @@ npx eas-cli@latest workflow:run .eas/workflows/dev-builds.yaml
 - Home lists every change to sync; status updates live on every screen
 - Choose a version when a note changed on GitHub and on the device (conflict)
 - Going back while editing saves the note
-- Native headers and toolbar buttons (Expo Router `Stack.Toolbar`, Expo UI)
+- Native UI on both platforms with Expo UI: lists, forms, sheets and buttons (SwiftUI on iOS, Jetpack Compose on Android), and native header toolbars
 - Pin notes to Home
 - Recently opened notes on Home
 

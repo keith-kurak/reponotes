@@ -6,7 +6,7 @@ A mobile notes app that syncs markdown files with a GitHub repository.
 
 - **Framework**: Expo SDK 58 with Expo Router
 - **Language**: TypeScript
-- **UI**: React Native with Ionicons; notes render with `react-native-enriched-markdown`
+- **UI**: Expo UI (`@expo/ui`) universal components for lists, forms, sheets and buttons (SwiftUI on iOS, Jetpack Compose on Android); notes render with `react-native-enriched-markdown`
 - **Colors**: use tokens from `src/constants/colors.ts` (`useAppColors`), not hex literals; light and dark mode
 - **State Management**: React Query for async operations, React useState for local state
 - **Storage**: expo-sqlite/kv-store for local metadata (synchronous API)
@@ -31,7 +31,8 @@ src/
 │   ├── FolderView.tsx    # One folder in the Files tab
 │   ├── MarkdownToolbar.tsx # Keyboard toolbar for the plain editor
 │   ├── NoteEditor.tsx    # Hybrid rich/plain note editor with save checks
-│   ├── SyncStatusBar.tsx # Live sync status line
+│   ├── NamePrompt.tsx    # Expo UI BottomSheet asking for a note/folder name
+│   ├── SyncStatusRow.tsx # Live sync status as a native ListItem
 │   └── Toast.tsx         # Auto-dismissing toast notifications
 ├── utils/                 # Utility modules
 │   ├── fileSystem.ts     # Local file operations (expo-file-system)
@@ -78,6 +79,14 @@ src/
 - The Format menu hides Underline (`_x_` is italic in markdown) and Spoiler (`||x||` is not standard)
 - The viewer uses `hardSoftBreaks` because the rich editor writes Enter as a single newline
 - Android edits plain markdown only (`RICH_EDITING` in NoteEditor); the plain editor has `MarkdownToolbar`
+
+### Native UI (Expo UI)
+
+- Prefer `@expo/ui` universal components (`Host`, `List`, `List.ForEach`, `ListItem`, `FieldGroup`, `TextInput`, `Button`, `BottomSheet`, `Icon`) over React Native views
+- Files: `List` + `List.ForEach` (`onRefresh` syncs); Home and Settings: `FieldGroup` sections
+- `TextInput` from `@expo/ui` keeps its value in `useNativeState`; read it with `.get()` in handlers. Do not update React state from its `onChangeText` (it can run on the UI thread)
+- Row icons come from `src/constants/listIcons.ts` (`Icon.select`: SF Symbol on iOS, XML drawable in `assets/icons` on Android); give leading icons `style={{ width: 28 }}` so names line up
+- Still React Native on purpose: the markdown viewer/editors (enriched-markdown), the plain editor (needs the selection API for the toolbar), the keyboard toolbar, the toast
 
 ### Navigation
 

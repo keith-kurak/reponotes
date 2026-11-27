@@ -1,3 +1,4 @@
+import { AppHost } from "@/components/AppHost";
 import { AppColors, useAppColors } from "@/constants/colors";
 import { useMarkdownStyle } from "@/constants/markdownStyle";
 import { toolbarIcons } from "@/constants/toolbarIcons";
@@ -13,6 +14,7 @@ import { noteMetadata } from "@/utils/noteMetadata";
 import { pendingChanges } from "@/utils/pendingChanges";
 import { downloadNote, forceUploadNote } from "@/utils/sync";
 import { Ionicons } from "@expo/vector-icons";
+import { Button, Row } from "@expo/ui";
 import { useMutation } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, usePreventRemove } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -24,7 +26,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { EnrichedMarkdownText } from "react-native-enriched-markdown";
@@ -233,26 +234,22 @@ export default function NoteViewerScreen() {
                   {resolveConflictMutation.isPending ? (
                     <ActivityIndicator color={colors.tint} />
                   ) : (
-                    <>
-                      <TouchableOpacity
-                        style={styles.conflictButton}
-                        onPress={confirmUseGitHub}
-                        accessibilityRole="button"
-                      >
-                        <Text style={styles.conflictButtonText}>
-                          Use GitHub version
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.conflictButton, styles.primaryButton]}
-                        onPress={() =>
-                          resolveConflictMutation.mutate("keep-mine")
-                        }
-                        accessibilityRole="button"
-                      >
-                        <Text style={styles.primaryButtonText}>Keep mine</Text>
-                      </TouchableOpacity>
-                    </>
+                    <AppHost matchContents>
+                      <Row spacing={8}>
+                        <Button
+                          variant="outlined"
+                          label="Use GitHub version"
+                          onPress={confirmUseGitHub}
+                        />
+                        <Button
+                          variant="filled"
+                          label="Keep mine"
+                          onPress={() =>
+                            resolveConflictMutation.mutate("keep-mine")
+                          }
+                        />
+                      </Row>
+                    </AppHost>
                   )}
                 </View>
               </View>
@@ -355,23 +352,6 @@ function createStyles(c: AppColors) {
       justifyContent: "flex-end",
       gap: 8,
       marginTop: 8,
-    },
-    conflictButton: {
-      paddingVertical: 8,
-      paddingHorizontal: 12,
-      borderRadius: 8,
-    },
-    conflictButtonText: {
-      fontSize: 15,
-      color: c.tint,
-    },
-    primaryButton: {
-      backgroundColor: c.tint,
-    },
-    primaryButtonText: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: c.onTint,
     },
     emptyHint: {
       fontSize: 16,
